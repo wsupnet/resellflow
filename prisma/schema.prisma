@@ -1,0 +1,332 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Users & invites ───────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String?
+  isAdmin      Boolean  @default(false)
+  // Embedded in session tokens; incremented on password change/reset so every
+  // previously issued session stops working.
+  sessionVersion Int    @default(0)
+  createdAt    DateTime @default(now())
+
+  purchases    Purchase[]
+  items        Item[]
+  sales        Sale[]
+  products     Product[]
+  expenses     Expense[]
+  photos       Photo[]
+  settings     Settings?
+  locations    Location[]
+  invitesMade  Invite[]   @relation("InviteCreator")
+}
+
+model Invite {
+  id         String    @id @default(cuid())
+  code       String    @unique
+  email      String? // optional: lock an invite to one email
+  createdBy  String
+  creator    User      @relation("InviteCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  usedAt     DateTime?
+  usedByEmail String?
+  createdAt  DateTime  @default(now())
+}
+
+// Per-user configurable fee rates + preferences.
+model Settings {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Fee percentages are stored as fractions (0.1325 = 13.25%). Editable in the UI.
+  ebayFeePct      Float   @default(0.1325)
+  ebayFlatFee     Float   @default(0.40)
+  mercariFeePct   Float   @default(0.10)
+  adFeePct        Float   @default(0.02)
+  defaultShipping Float   @default(0)
+
+  // When on, scanning a barcode queries an external UPC database to pre-fill the
+  // item name. Off by default (most JP Book Off stock isn't in UPC databases).
+  upcLookup       Boolean @default(false)
+
+  // Default display currency (USD/JPY) + how to convert to yen: "live" = today's
+  // rate for everything; "historical" = each transaction's locked rate.
+  homeCurrency    String  @default("USD")
+  fxMode          String  @default("live")
+
+  // UI theme: "light" | "cream" | "dark" | "system" (follows device preference).
+  theme           String  @default("light")
+}
+
+// ─────────────────────────── Sourcing ───────────────────────────
+
+enum PurchaseKind {
+  SINGLE // a single item bought on its own
+  LOT // a bundle of many items bought together
+}
+
+// A buy event. A SINGLE purchase has exactly one Item; a LOT has many.
+// The lot's allocable cost (costUsd + taxUsd) is distributed across its
+// items in proportion to each item's eventual sale price.
+model Purchase {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind      PurchaseKind @default(SINGLE)
+  title     String // e.g. "book off weekend lot" or the single item's name
+  source    String // Broad channel/type: Book Off, Facebook Marketplace, Estate Sale, etc.
+  // Optional specific place this was sourced from (a managed, reusable Location),
+  // for per-location profit analysis. `source` stays as the broad channel/type.
+  locationId String?
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  // Personal belongings you already owned: no real purchase cost, so they're
+  // tracked as a separate bucket and excluded from flip ROI (cost basis is $0).
+  isPersonal Boolean    @default(false)
+  purchasedAt DateTime   @default(now())
+
+  // Amount actually paid. Both currencies optional; USD is canonical for P&L.
+  costUsd   Float        @default(0)
+  costJpy   Float? // original yen amount if bought in Japan
+  taxUsd    Float        @default(0) // tax tacked onto a lot, added to allocable cost
+  taxJpy    Float?
+  fxRate    Float? // USD per JPY at time of purchase (locked record of the rate)
+
+  notes     String?
+
+  items     Item[]
+  expenses  Expense[]
+
+  @@index([userId])
+}
+
+// ─────────────────────────── Inventory ───────────────────────────
+
+enum ItemStatus {
+  UNLISTED
+  LISTED
+  SOLD
+  // Write-offs: the item left inventory without a sale (loss of sale). Its
+  // allocated cost becomes a realized loss for reporting.
+  LOST
+  DAMAGED
+}
+
+// A single sellable unit. Always belongs to exactly one origin Purchase (its lot).
+// Its allocated cost is derived from that lot, so profit always rolls back to the
+// lot it came from — even when sold individually or bundled with other lots' items.
+model Item {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  purchaseId  String
+  purchase    Purchase   @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  productId   String?
+  product     Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  title       String
+  status      ItemStatus @default(UNLISTED)
+  // Completeness grade for media (games/movies/etc.). Only meaningful when the
+  // product's category tracks conditions; null otherwise.
+  condition   String?
+
+  // Optional estimate used to weight cost allocation BEFORE an item sells.
+  // Falls back gracefully when absent (see lib/finance.ts).
+  estimatedValue Float?
+
+  // Manual override of the item's share of the lot cost. When set, this exact
+  // USD value is used instead of the proportional calculation.
+  costOverrideUsd Float?
+  // The exact yen amount entered when the override was typed in yen. Null when
+  // entered in USD (or no override).
+  costOverrideJpy Float?
+
+  notes       String?
+  createdAt   DateTime   @default(now())
+  // When the item was marked LOST/DAMAGED — reports recognize the loss in this period.
+  writtenOffAt DateTime?
+
+  // An item appears on at most one sale line once sold.
+  saleLine    SaleItem?
+  expenses    Expense[]
+  photos      Photo[]
+
+  @@index([userId])
+  @@index([purchaseId])
+  @@index([productId])
+}
+
+// ─────────────────────────── Selling ───────────────────────────
+
+enum Platform {
+  EBAY
+  MERCARI
+  FACEBOOK
+  OTHER
+}
+
+// A sale event. May contain multiple items, including items from DIFFERENT lots
+// (your "Multiple" rows). Sale-level proceeds and fees are split across the line
+// items in proportion to each line's sale price.
+model Sale {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  platform    Platform   @default(EBAY)
+  soldAt      DateTime   @default(now())
+  // USD per JPY at the time of sale (locked, like Purchase.fxRate) so the sale's
+  // yen value can be shown historically. Null for sales recorded before this.
+  fxRate      Float?
+
+  // Fees for the whole sale. Auto-filled from Settings on the client, but stored
+  // explicitly here so historical sales are immune to later fee-rate changes.
+  shippingFee Float      @default(0)
+  ebayFee     Float      @default(0)
+  mercariFee  Float      @default(0)
+  adFee       Float      @default(0)
+
+  // Original entered amounts when the sale was recorded in yen — the exact
+  // figures typed, not a conversion. Null when entered in USD.
+  shippingFeeJpy Float?
+  ebayFeeJpy     Float?
+  mercariFeeJpy  Float?
+  adFeeJpy       Float?
+
+  notes       String?
+
+  lines       SaleItem[]
+  expenses    Expense[]
+
+  @@index([userId])
+}
+
+// One line of a sale: a single item and the price it sold for within that sale.
+model SaleItem {
+  id        String   @id @default(cuid())
+  saleId    String
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  itemId    String   @unique
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // Gross sale price attributed to this item (before fees).
+  salePrice Float    @default(0)
+  // The exact yen amount entered when the sale was recorded in yen (salePrice
+  // is its USD conversion). Null when entered in USD.
+  priceJpy  Float?
+
+  @@index([saleId])
+}
+
+// ─────────────────────────── Locations ───────────────────────────
+
+// A specific, reusable place you source from (e.g. "Book Off Downtown",
+// "Smith Estate Sale 6/28"). Picked from a managed list so per-location profit
+// reports stay clean (no typo-duplicates). Distinct from Purchase.source (type).
+model Location {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  kind      String? // optional tag, e.g. Book Off / Estate Sale / Thrift
+  notes     String?
+  createdAt DateTime @default(now())
+
+  purchases Purchase[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// ─────────────────────────── Products ───────────────────────────
+
+// A normalized grouping of items that are "the same thing" (e.g. all New 3DS LL).
+// Powers sold-count history, the good-deal checker, and buy-more signals.
+model Product {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String
+  normalizedKey String // lowercased/condensed key used for auto-grouping
+  category      String?
+
+  // Barcode / SKU / unique identifier. When set, this is the authoritative key
+  // for grouping "the same thing" and the sold-count — more reliable than the
+  // name. Items tagged with the same code are auto-merged into one product.
+  sku           String?
+
+  // Optional manual "going rate" comp the user pastes from eBay sold / 130point.
+  compPrice     Float?
+  compNotes     String?
+
+  items         Item[]
+
+  @@unique([userId, normalizedKey])
+  @@unique([userId, sku])
+  @@index([userId])
+}
+
+// ─────────────────────────── Photos ───────────────────────────
+
+// An uploaded item photo. The actual files live on the mounted uploads volume as
+// <id>.jpg (full, downscaled) and <id>.thumb.jpg (thumbnail), so no blob in the DB.
+model Photo {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
+  @@index([userId])
+}
+
+// ─────────────────────────── General ledger ───────────────────────────
+
+// A business expense that isn't a line-item purchase: import fees, customs,
+// commissions paid to people who sell for you, shipping supplies, subscriptions,
+// etc. May be attached to a specific lot, item, or sale, or left general. All
+// expenses reduce net profit and count toward the ROI "total spend" denominator.
+model Expense {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date        DateTime  @default(now())
+  category    String // Commission, Import Fee, Customs/Duty, Supplies, Subscription, Mileage, Other
+  description String?
+  amountUsd   Float     @default(0)
+  amountJpy   Float?
+
+  // At most one of these is set; if none, it's a general business expense.
+  purchaseId  String?
+  purchase    Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  itemId      String?
+  item        Item?     @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  saleId      String?
+  sale        Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([purchaseId])
+  @@index([itemId])
+  @@index([saleId])
+}

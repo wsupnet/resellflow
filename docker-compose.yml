@@ -1,0 +1,93 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-resell}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-resellflow}
+      # Store data in a subdirectory so Postgres init doesn't trip over the
+      # volume mount point's permissions/contents (common on NAS filesystems).
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resell} -d ${POSTGRES_DB:-resellflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+  app:
+    # Builds on the host from source. Needs a .env (copy .env.example) — the
+    # stack refuses to start until the required secrets below are set.
+    #   docker compose up -d --build
+    build: .
+    image: resellflow:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      FX_API_URL: ${FX_API_URL:-https://open.er-api.com/v6/latest/USD}
+      NODE_ENV: production
+    ports:
+      - "${APP_PORT:-3939}:3000"
+    volumes:
+      - uploads:/app/uploads
+
+  # Optional: Tailscale HTTPS for the phone camera. Trusted cert, works anywhere.
+  # Starts only with the "ts" profile:
+  #   1) Tailscale admin → DNS → enable MagicDNS + "Enable HTTPS"
+  #   2) Tailscale admin → Settings → Keys → make a reusable auth key
+  #   3) put TS_AUTHKEY=tskey-... in a .env file here, then:
+  #        docker compose --profile ts up -d
+  #   4) open https://resellflow.<your-tailnet>.ts.net on your phone
+  tailscale:
+    image: tailscale/tailscale:latest
+    profiles: ["ts"]
+    # Shares the app's network so it can serve http://127.0.0.1:3000 over HTTPS.
+    network_mode: service:app
+    depends_on:
+      - app
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_HOSTNAME:-resellflow}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+    cap_add:
+      - net_admin
+    volumes:
+      - ts_state:/var/lib/tailscale
+      - ./serve.json:/config/serve.json:ro
+    restart: unless-stopped
+
+  # Optional HTTPS reverse proxy. Only starts with the "https" profile:
+  #   SITE_ADDRESS=192.168.x.x docker compose --profile https up -d
+  # Needed for the phone camera (barcode scanner requires a secure context).
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["https"]
+    depends_on:
+      - app
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  db_data:
+  uploads:
+  caddy_data:
+  caddy_config:
+  ts_state:

@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.env
+uploads
+*.log
+.DS_Store
+reselling*.xlsx
+resellflow-image.tar.gz
+backup

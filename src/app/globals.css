@@ -1,0 +1,300 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ───────────────────────── Themes ─────────────────────────
+   Every color utility (slate/emerald/red/amber/purple/brand) resolves to these
+   RGB-triplet variables (see tailwind.config.ts), so swapping the set re-skins
+   the whole app. Values are hand-picked per theme — dark is NOT an automatic
+   inversion (chrome stays recessive, text brightens, tints darken). */
+
+:root {
+  color-scheme: light;
+  --surface: 255 255 255; /* cards, inputs, dialogs */
+  --brand-solid: 31 87 214; /* primary button bg (kept vivid in every theme) */
+  --brand-solid-hover: 24 68 170;
+  --chart-grid: #eef2f7;
+  --chart-tick: #94a3b8;
+
+  --slate-50: 248 250 252;
+  --slate-100: 241 245 249;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --slate-500: 100 116 139;
+  --slate-600: 71 85 105;
+  --slate-700: 51 65 85;
+  --slate-800: 30 41 59;
+  --slate-900: 15 23 42;
+
+  --emerald-50: 236 253 245;
+  --emerald-100: 209 250 229;
+  --emerald-300: 110 231 183;
+  --emerald-400: 52 211 153;
+  --emerald-500: 16 185 129;
+  --emerald-600: 5 150 105;
+  --emerald-700: 4 120 87;
+
+  --red-50: 254 242 242;
+  --red-100: 254 226 226;
+  --red-200: 254 202 202;
+  --red-500: 239 68 68;
+  --red-600: 220 38 38;
+  --red-700: 185 28 28;
+
+  --amber-50: 255 251 235;
+  --amber-100: 254 243 199;
+  --amber-200: 253 230 138;
+  --amber-300: 252 211 77;
+  --amber-600: 217 119 6;
+  --amber-700: 180 83 9;
+  --amber-800: 146 64 14;
+
+  --purple-100: 243 232 255;
+  --purple-700: 126 34 206;
+
+  --brand-50: 238 246 255;
+  --brand-100: 217 234 255;
+  --brand-200: 183 213 255;
+  --brand-300: 143 188 255;
+  --brand-500: 47 109 246;
+  --brand-600: 31 87 214;
+  --brand-700: 24 68 170;
+}
+
+/* Off-white: warm cream, paper-ledger feel. Neutrals shift to warm stone. */
+[data-theme="cream"] {
+  --surface: 255 253 248;
+
+  --slate-50: 250 246 239;
+  --slate-100: 240 232 218;
+  --slate-200: 227 217 198;
+  --slate-300: 208 196 172;
+  --slate-400: 161 147 126;
+  --slate-500: 133 119 99;
+  --slate-600: 95 84 67;
+  --slate-700: 70 62 49;
+  --slate-800: 50 44 34;
+  --slate-900: 34 30 23;
+
+  --chart-grid: #ece3d2;
+  --chart-tick: #a1937e;
+}
+
+/* Dark slate: recessive chrome, brighter text, darkened accent tints.
+   NOTE: keep this block in sync with the system-dark media block below. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: 30 41 59;
+  --chart-grid: #2a3850;
+  --chart-tick: #7d8ea6;
+
+  --slate-50: 15 23 42; /* page bg + inset wells */
+  --slate-100: 40 53 72; /* pill bgs, hovers */
+  --slate-200: 51 65 85; /* borders */
+  --slate-300: 71 85 105; /* input borders */
+  --slate-400: 143 163 187; /* muted text */
+  --slate-500: 165 180 200; /* secondary text */
+  --slate-600: 195 206 222;
+  --slate-700: 213 222 234;
+  --slate-800: 230 236 244; /* headings */
+  --slate-900: 241 245 251;
+
+  --emerald-50: 12 43 34;
+  --emerald-100: 18 60 47;
+  --emerald-600: 52 211 153;
+  --emerald-700: 110 231 183;
+
+  --red-50: 51 27 30;
+  --red-100: 71 35 42;
+  --red-200: 92 45 52;
+  --red-600: 248 113 113;
+  --red-700: 252 165 165;
+
+  --amber-50: 51 39 15;
+  --amber-100: 69 52 19;
+  --amber-200: 107 80 29;
+  --amber-300: 138 106 36;
+  --amber-600: 251 191 36;
+  --amber-700: 252 211 77;
+  --amber-800: 253 230 138;
+
+  --purple-100: 59 42 85;
+  --purple-700: 216 180 254;
+
+  --brand-50: 28 47 85;
+  --brand-100: 33 56 100;
+  --brand-200: 43 74 140;
+  --brand-300: 58 94 168;
+  --brand-500: 92 141 252;
+  --brand-600: 122 165 255;
+  --brand-700: 158 190 255;
+}
+
+/* System: follow the device. Light is inherited from :root; this mirrors the
+   dark block above when the device prefers dark. */
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+    color-scheme: dark;
+    --surface: 30 41 59;
+    --chart-grid: #2a3850;
+    --chart-tick: #7d8ea6;
+
+    --slate-50: 15 23 42;
+    --slate-100: 40 53 72;
+    --slate-200: 51 65 85;
+    --slate-300: 71 85 105;
+    --slate-400: 143 163 187;
+    --slate-500: 165 180 200;
+    --slate-600: 195 206 222;
+    --slate-700: 213 222 234;
+    --slate-800: 230 236 244;
+    --slate-900: 241 245 251;
+
+    --emerald-50: 12 43 34;
+    --emerald-100: 18 60 47;
+    --emerald-600: 52 211 153;
+    --emerald-700: 110 231 183;
+
+    --red-50: 51 27 30;
+    --red-100: 71 35 42;
+    --red-200: 92 45 52;
+    --red-600: 248 113 113;
+    --red-700: 252 165 165;
+
+    --amber-50: 51 39 15;
+    --amber-100: 69 52 19;
+    --amber-200: 107 80 29;
+    --amber-300: 138 106 36;
+    --amber-600: 251 191 36;
+    --amber-700: 252 211 77;
+    --amber-800: 253 230 138;
+
+    --purple-100: 59 42 85;
+    --purple-700: 216 180 254;
+
+    --brand-50: 28 47 85;
+    --brand-100: 33 56 100;
+    --brand-200: 43 74 140;
+    --brand-300: 58 94 168;
+    --brand-500: 92 141 252;
+    --brand-600: 122 165 255;
+    --brand-700: 158 190 255;
+  }
+}
+
+/* Raw `bg-white` utilities (dialogs, segmented toggles, nav backdrop) follow the
+   theme surface. Scoped with :root to outrank the utility; alpha variants used
+   by the always-dark camera overlay (bg-white/15 etc.) intentionally stay white. */
+:root .bg-white {
+  background-color: rgb(var(--surface));
+}
+:root .bg-white\/90 {
+  background-color: rgb(var(--surface) / 0.9);
+}
+:root .bg-white\/70 {
+  background-color: rgb(var(--surface) / 0.7);
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(120%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-toast-in {
+  animation: toastIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm;
+    background-color: rgb(var(--surface));
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-slate-600;
+  }
+  .input {
+    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+    background-color: rgb(var(--surface));
+    color: rgb(var(--slate-900));
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn text-white;
+    background-color: rgb(var(--brand-solid));
+  }
+  .btn-primary:hover {
+    background-color: rgb(var(--brand-solid-hover));
+  }
+  .btn-ghost {
+    @apply btn border border-slate-300 text-slate-700 hover:bg-slate-50;
+    background-color: rgb(var(--surface));
+  }
+  .btn-danger {
+    @apply btn border border-red-200 text-red-600 hover:bg-red-50;
+    background-color: rgb(var(--surface));
+  }
+  .pill {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .th {
+    @apply px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500;
+  }
+  .td {
+    @apply px-3 py-2 text-sm;
+  }
+}
+
+/* Responsive tables: on phones a `.rtable` collapses each row into a stacked
+   card, labelling each cell by its column (via data-label) instead of cramming
+   every column into a horizontal scroll. Desktop layout is unaffected. */
+@media (max-width: 767px) {
+  table.rtable thead {
+    display: none;
+  }
+  table.rtable,
+  table.rtable tbody {
+    display: block;
+    width: 100%;
+  }
+  table.rtable tbody tr {
+    @apply mb-2.5 block rounded-xl border border-slate-200 p-3 shadow-sm;
+    background-color: rgb(var(--surface));
+  }
+  table.rtable td {
+    @apply flex items-center justify-between gap-4 border-0 px-0 py-1 text-right;
+  }
+  table.rtable td::before {
+    content: attr(data-label);
+    @apply text-left text-xs font-medium uppercase tracking-wide text-slate-400;
+  }
+  table.rtable td[data-label=""]::before,
+  table.rtable td:not([data-label])::before {
+    content: none;
+  }
+  /* Primary cell (name/thumbnail): full width, left-aligned, sits at the top. */
+  table.rtable td.cell-main {
+    @apply block border-b border-slate-100 pb-2 text-left;
+  }
+  /* An action cell (e.g. Edit) becomes a full-width tap target. */
+  table.rtable td.cell-action {
+    @apply block pt-1 text-center;
+  }
+  /* A full-width block cell (e.g. an expanded edit form) — must beat the flex
+     rule above, so it's scoped as `table.rtable td.cell-block`. */
+  table.rtable td.cell-block {
+    @apply block px-0 pt-2 text-left;
+  }
+}

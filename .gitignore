@@ -1,0 +1,19 @@
+node_modules
+.next
+.env
+*.log
+uploads
+dist
+.DS_Store
+next-env.d.ts
+
+# Spreadsheets, image tarballs and backups — real business data, never commit
+*.xlsx
+*.xls
+*.tar.gz
+/backup/
+/backup*
+
+# Local tooling / AI context
+.claude/
+*.local.json

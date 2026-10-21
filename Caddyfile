@@ -1,0 +1,18 @@
+# Caddy reverse proxy that puts HTTPS in front of the app — required for the
+# phone camera (barcode scanner needs a secure context).
+#
+# SITE_ADDRESS controls what hostname Caddy serves. Examples:
+#   SITE_ADDRESS=resellflow.local        -> local name, Caddy self-signed cert
+#   SITE_ADDRESS=192.168.1.50            -> your Mac's LAN IP, self-signed cert
+#   SITE_ADDRESS=resell.example.com      -> a real domain (Caddy auto Let's Encrypt)
+#
+# With a local name / IP, Caddy issues its own certificate ("tls internal").
+# Browsers will warn until you install Caddy's root CA once (see README).
+
+{$SITE_ADDRESS:localhost} {
+	reverse_proxy app:3000
+
+	# Use Caddy's internal CA for local names / IPs. Comment this line out if
+	# SITE_ADDRESS is a real public domain so Let's Encrypt is used instead.
+	tls internal
+}
