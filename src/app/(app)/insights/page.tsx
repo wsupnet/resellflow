@@ -52,12 +52,14 @@ export default async function InsightsPage({ searchParams }: { searchParams: { s
       : sort === "roi" ? (s.avgRoi ?? 0) * 100
       : sort === "freq" ? s.timesSold
       : sort === "speed" ? (s.avgDaysToSell ?? 0)
-      : (s.avgNet ?? 0) * m.rate
+      // Blended: plot the score itself so bar lengths follow the ranking.
+      : s.score
   }));
   const chartFmt =
     sort === "roi" ? { symbol: "", suffix: "%", decimals: 1 }
     : sort === "freq" ? { symbol: "", suffix: "", decimals: 0 }
     : sort === "speed" ? { symbol: "", suffix: "d", decimals: 0 }
+    : sort === "score" ? { symbol: "", suffix: "", decimals: 1 }
     : { symbol: u.symbol, suffix: "", decimals: u.decimals };
 
   // The chart always ranks the full set; only the table paginates.
@@ -97,7 +99,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: { s
           <div className="card">
             <h2 className="mb-2 text-sm font-semibold text-slate-600">
               Top 10 by {SORTS.find((s) => s.key === sort)?.label}
-              {sort === "roi" ? " (%)" : sort === "freq" ? " (count)" : sort === "speed" ? " (days)" : ` (${u.symbol})`}
+              {sort === "roi" ? " (%)" : sort === "freq" ? " (count)" : sort === "speed" ? " (days)" : sort === "score" ? " (score)" : ` (${u.symbol})`}
             </h2>
             {sort === "speed" ? (
               // A bar chart of days is misleading here — lower is better and same-day

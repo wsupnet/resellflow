@@ -292,10 +292,10 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
           Auto-calculate fees from my settings
         </label>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {(["ebayFee", "mercariFee", "adFee", "shippingFee"] as const).map((k) => (
+          {([["ebayFee", "eBay fee"], ["mercariFee", "Mercari fee"], ["adFee", "Ad fee"], ["shippingFee", "Shipping"]] as const).map(([k, label]) => (
             <div key={k}>
-              <label className="label capitalize">
-                {k.replace("Fee", " fee").replace(" shipping fee", "shipping")} ({sym})
+              <label className="label">
+                {label} ({sym})
               </label>
               <input
                 inputMode="decimal"
