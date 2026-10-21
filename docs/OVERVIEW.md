@@ -14,8 +14,16 @@ what ResellFlow handles automatically:
 - **Fees.** Every platform charges differently.
 - **"Was that worth it?"** Answering it at the item, lot and business level.
 
-> All screenshots below use **made-up demo data**.
+> All screenshots and the demo video use **made-up demo data**.
 > Ready to use it? The **[User guide](USER-GUIDE.md)** walks through every task step by step.
+
+### See it in action
+
+[![ResellFlow demo](demo/resellflow-demo.gif)](demo/resellflow-demo.mp4)
+
+▶ **[Watch the full-quality video (MP4, ~90s)](demo/resellflow-demo.mp4)**: adding a lot paid in yen,
+recording a bundle sale across two lots, an item's profit breakdown, filtering and bulk-editing
+inventory, analytics, the $/¥ toggle, and the Deal Checker on a phone.
 
 ![Dashboard](screenshots/desktop-dashboard.png)
 

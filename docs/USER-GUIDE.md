@@ -3,7 +3,8 @@
 A step-by-step walkthrough of everyday use: from your first login to buying,
 selling, tracking expenses, checking deals in the store, and backing up your data.
 
-New to ResellFlow? Read the [Overview](OVERVIEW.md) first for the big picture.
+New to ResellFlow? Read the [Overview](OVERVIEW.md) first for the big picture, or watch the
+[90-second demo video](demo/resellflow-demo.mp4) to see the main tasks below being done.
 Setting it up? See the [README](../README.md#quick-start) or [Hosting on a NAS](../DEPLOY-NAS.md).
 
 **Contents**

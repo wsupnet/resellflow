@@ -4,6 +4,10 @@
 [Hosting on a NAS](DEPLOY-NAS.md) · [How the money math works](#how-the-money-math-works) ·
 [Common commands](#common-commands)
 
+[![ResellFlow demo: adding a lot, recording a bundle sale, analytics and the Deal Checker](docs/demo/resellflow-demo.gif)](docs/demo/resellflow-demo.mp4)
+
+<sub>▶ **[Watch the full-quality demo video (MP4, ~90s)](docs/demo/resellflow-demo.mp4)** · all data shown is made up</sub>
+
 Inventory, lot tracking, and profit/loss for resellers who buy at garage sales,
 thrift stores, estate sales, and Book Off — and flip on eBay, Mercari, and
 Facebook. Built to solve the things a spreadsheet can't:
@@ -48,6 +52,7 @@ Facebook. Built to solve the things a spreadsheet can't:
 | Doc | What's in it |
 |---|---|
 | [Overview](docs/OVERVIEW.md) | What the app does, page by page, with screenshots (demo data) |
+| [Demo video](docs/demo/resellflow-demo.mp4) | A 90-second walkthrough of the main features (demo data) |
 | [User guide](docs/USER-GUIDE.md) | Step by step: first login, adding items and lots, sales, expenses, the dashboard, Deal Checker, backups |
 | [Quick start](#quick-start) | Run it locally with Docker in a few minutes |
 | [Hosting on a NAS](DEPLOY-NAS.md) | Synology / QNAP / UGREEN / Unraid setup, HTTPS for the phone camera, backups, updates |

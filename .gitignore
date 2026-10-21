@@ -17,3 +17,6 @@ next-env.d.ts
 # Local tooling / AI context
 .claude/
 *.local.json
+
+# Demo video scratch output (scripts/demo)
+/demo-out/
