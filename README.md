@@ -1,5 +1,9 @@
 # ResellFlow
 
+**[Overview](docs/OVERVIEW.md)** · **[User guide](docs/USER-GUIDE.md)** · [Quick start](#quick-start) ·
+[Hosting on a NAS](DEPLOY-NAS.md) · [How the money math works](#how-the-money-math-works) ·
+[Common commands](#common-commands)
+
 Inventory, lot tracking, and profit/loss for resellers who buy at garage sales,
 thrift stores, estate sales, and Book Off — and flip on eBay, Mercari, and
 Facebook. Built to solve the things a spreadsheet can't:
@@ -38,6 +42,19 @@ Facebook. Built to solve the things a spreadsheet can't:
   bulk-import inventory and sales (additive — never overwrites). In Settings.
 - **Multi-user & self-hostable.** Invite-only accounts, each user's data private,
   all in one `docker compose`.
+
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [Overview](docs/OVERVIEW.md) | What the app does, page by page, with screenshots (demo data) |
+| [User guide](docs/USER-GUIDE.md) | Step by step: first login, adding items and lots, sales, expenses, the dashboard, Deal Checker, backups |
+| [Quick start](#quick-start) | Run it locally with Docker in a few minutes |
+| [Hosting on a NAS](DEPLOY-NAS.md) | Synology / QNAP / UGREEN / Unraid setup, HTTPS for the phone camera, backups, updates |
+| [Passwords & lockout](DEPLOY-NAS.md#9-passwords--lockout) | Changing your password, and resetting it from the server if you're locked out |
+| [Inviting family & friends](#inviting-family--friends) | Invite-only accounts with private data per user |
+| [Importing your existing data](#importing-your-existing-data) | CSV import and backup restore |
+| [How the money math works](#how-the-money-math-works) | How lot costs, fees and ROI are calculated |
 
 ## Quick start
 

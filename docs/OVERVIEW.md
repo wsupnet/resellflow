@@ -15,6 +15,7 @@ what ResellFlow handles automatically:
 - **"Was that worth it?"** Answering it at the item, lot and business level.
 
 > All screenshots below use **made-up demo data**.
+> Ready to use it? The **[User guide](USER-GUIDE.md)** walks through every task step by step.
 
 ![Dashboard](screenshots/desktop-dashboard.png)
 
@@ -160,4 +161,5 @@ sales add up to it, so there are no mystery totals.
   No subscription, and your data stays with you.
 - **Built with** Next.js, PostgreSQL, Prisma, Tailwind and Recharts.
 
-See the [README](../README.md) for setup, and [DEPLOY-NAS.md](../DEPLOY-NAS.md) for hosting on a NAS.
+See the [User guide](USER-GUIDE.md) for step-by-step instructions, the [README](../README.md) for
+setup, and [DEPLOY-NAS.md](../DEPLOY-NAS.md) for hosting on a NAS.
