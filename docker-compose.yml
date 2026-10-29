@@ -1,3 +1,5 @@
+name: reselling-app
+
 services:
   db:
     image: postgres:16-alpine
@@ -10,7 +12,7 @@ services:
       # volume mount point's permissions/contents (common on NAS filesystems).
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - ${APPDATA:?APPDATA is not set}/reselling-app/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resell} -d ${POSTGRES_DB:-resellflow}"]
       interval: 10s
@@ -38,7 +40,7 @@ services:
     ports:
       - "${APP_PORT:-3939}:3000"
     volumes:
-      - uploads:/app/uploads
+      - ${APPDATA:?APPDATA is not set}/reselling-app/uploads:/app/uploads
 
   # Optional: Tailscale HTTPS for the phone camera. Trusted cert, works anywhere.
   # Starts only with the "ts" profile:
@@ -62,7 +64,7 @@ services:
     cap_add:
       - net_admin
     volumes:
-      - ts_state:/var/lib/tailscale
+      - ${APPDATA:?APPDATA is not set}/reselling-app/tailscale:/var/lib/tailscale
       - ./serve.json:/config/serve.json:ro
     restart: unless-stopped
 
@@ -86,8 +88,5 @@ services:
       - caddy_config:/config
 
 volumes:
-  db_data:
-  uploads:
   caddy_data:
   caddy_config:
-  ts_state:

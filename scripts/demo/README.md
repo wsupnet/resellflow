@@ -15,11 +15,13 @@ database is never touched or shown.
 
 Run from the repo root. `demo.env` is a scratch env file (not the real `.env`) with
 throwaway secrets, `ADMIN_EMAIL=demo@resellflow.test`,
-`ADMIN_PASSWORD=demo-password-123` and `APP_PORT=3940`. `demo.override.yml` just sets
+`ADMIN_PASSWORD=demo-password-123`, `APP_PORT=3940` and `APPDATA=./demo-data` (its
+own data folder — never point it at `./dev-data` or the real data, or the demo
+seed lands in your database). `demo.override.yml` just sets
 `services.app.image: resellflow:demo` so the demo build doesn't replace your image.
 
 ```bash
-# 1. Start an isolated demo stack (own project name, own volumes, port 3940)
+# 1. Start an isolated demo stack (own project name, own ./demo-data, port 3940)
 docker compose -p resellflow-demo --env-file demo.env -f docker-compose.yml -f demo.override.yml up -d --build db app
 
 # 2. Load the fictional data into it
@@ -32,8 +34,8 @@ docker run --rm --network resellflow-demo_default -v "$PWD/scripts/demo:/rec/src
 
 # 4. Copy the results into docs/demo/, then tear the demo stack down
 cp demo-out/resellflow-demo.mp4 demo-out/resellflow-demo.gif docs/demo/
-docker compose -p resellflow-demo down -v
+docker compose -p resellflow-demo --env-file demo.env down && rm -rf demo-data
 ```
 
 The walkthrough creates a lot, records a sale and bulk-edits items, so reseed (or
-`down -v` and start over) before recording again.
+tear down, delete `demo-data/` and start over) before recording again.

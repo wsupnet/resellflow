@@ -1,8 +1,18 @@
 node_modules
 .next
 .env
+.env.*
+!.env.example
 *.log
 uploads
+
+# Runtime data (bind-mounted APPDATA folders, DB files, dumps) — never commit
+/data/
+/dev-data/
+/demo-data/
+/*.sql
+/*.sql.gz
+/*.dump
 dist
 .DS_Store
 next-env.d.ts

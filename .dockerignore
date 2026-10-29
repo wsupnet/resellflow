@@ -8,5 +8,8 @@ uploads
 reselling*.xlsx
 resellflow-image.tar.gz
 backup
+data
+dev-data
+demo-data
 docs
 demo-out

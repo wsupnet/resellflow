@@ -37,7 +37,7 @@ Facebook. Built to solve the things a spreadsheet can't:
   (shipping / eBay / Mercari / ad), each attributed expense by name, cost of
   goods, and net — split correctly when sold in a multi-item bundle.
 - **Item photos.** Upload multiple photos per item (or snap one on your phone);
-  auto-thumbnailed for fast lists, stored on the uploads volume, served only to
+  auto-thumbnailed for fast lists, stored in the uploads data folder, served only to
   the owner.
 - **Smart barcode naming.** Scanning looks the code up across your own catalog
   first (instant, private, learns over time), then OpenLibrary (books/manga),
@@ -69,13 +69,28 @@ You only need **Docker** installed.
 cp .env.example .env
 # edit .env: set strong POSTGRES_PASSWORD, AUTH_SECRET, and your ADMIN_EMAIL/PASSWORD
 #   AUTH_SECRET:  openssl rand -base64 48
+# APPDATA=./dev-data is already set for local use
 
 docker compose up -d --build
 ```
 
-Open <http://localhost:3000> and sign in with the `ADMIN_EMAIL` / `ADMIN_PASSWORD`
-you set. The database schema and the admin account are created automatically on
-first boot.
+Open <http://localhost:3939> (or whatever `APP_PORT` is) and sign in with the
+`ADMIN_EMAIL` / `ADMIN_PASSWORD` you set. The database schema and the admin
+account are created automatically on first boot.
+
+### Where the data lives
+
+Data is kept in plain folders outside the containers, under `APPDATA` from `.env`
+(required — compose refuses to start without it):
+
+| Folder | Mounted at | Contents |
+|---|---|---|
+| `$APPDATA/reselling-app/postgres` | `db:/var/lib/postgresql/data` | Postgres database (in `pgdata/`) |
+| `$APPDATA/reselling-app/uploads` | `app:/app/uploads` | Item photos |
+| `$APPDATA/reselling-app/tailscale` | `tailscale:/var/lib/tailscale` | Tailscale state (`ts` profile only) |
+
+Locally `APPDATA=./dev-data` (git-ignored). On the NAS it's
+`/volume1/docker/appdata` — see [Hosting on a NAS](DEPLOY-NAS.md).
 
 ### Important: keep `DATABASE_URL` and `POSTGRES_*` in sync
 
@@ -141,6 +156,13 @@ phone use while sourcing.
 ```bash
 docker compose logs -f app        # tail app logs
 docker compose down               # stop
-docker compose down -v            # stop and DELETE all data (db + uploads)
-docker compose up -d --build      # rebuild after pulling changes
+git pull && docker compose up -d --build   # update: rebuild after pulling changes
+```
+
+Data lives in the `$APPDATA/reselling-app/` folders, so `docker compose down -v`
+does **not** delete it. To wipe a local dev install, stop the stack and delete
+`dev-data/`:
+
+```bash
+docker compose down && rm -rf dev-data   # DELETES local db + photos
 ```
