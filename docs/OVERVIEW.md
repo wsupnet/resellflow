@@ -94,7 +94,8 @@ sales add up to it, so there are no mystery totals.
 
 - Record a sale of one item or a **bundle** of several
 - Pick the platform and the fees are **auto-calculated** from your fee settings (you can override them)
-- Enter a single total for a bundle and it's split across the items by value
+- Enter a single total for a bundle and it's split across the items **by what each one cost you**,
+  so a cheap item in a big bundle doesn't show a misleading ROI. The split updates if a cost changes later
 - Sort and filter by date, gross or net
 
 ### 📊 Analytics: Reports, Insights, Trends
@@ -104,7 +105,8 @@ sales add up to it, so there are no mystery totals.
 - **Reports**: profit & loss, net profit by month, and breakdowns by **sourcing location**,
   **platform**, **source type** and **expense category**
 - **Insights: "what to buy more of."** Ranks products by a blended score, or by total profit,
-  ROI, how often they sell, or how fast
+  ROI, how often they sell, or how fast. Bundle sales are tagged and can be filtered out, and an
+  ROI needs 3+ sales before it can top the list
 
   ![Insights](screenshots/desktop-insights.png)
 
@@ -153,7 +155,7 @@ sales add up to it, so there are no mystery totals.
 
 | | |
 |---|---|
-| 🧮 **Honest profit math** | Lot costs and sale fees are split fairly across items; profit always rolls back to the lot it came from |
+| 🧮 **Honest profit math** | Lot costs, bundle sale prices and fees are split fairly across items; profit always rolls back to the lot it came from |
 | 🎒 **Personal items tracked separately** | Things you already owned count toward profit but don't inflate your ROI |
 | 💴 **Dollars and yen** | Built for buying in Japan: store the yen price and the exchange rate you actually paid |
 | 📷 **Barcode scanning** | Scan with your phone camera to add items or check deals; optional name lookup from book, music and retail databases |

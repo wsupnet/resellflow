@@ -165,8 +165,11 @@ still counts against your profit, which keeps the numbers honest.
 3. Choose whether you're entering amounts in USD or yen.
 4. Under **Items in this sale**, tick the item(s) that sold. Use **Search items…** to find them.
    - **One item:** enter its price.
-   - **A bundle:** price each item, or enter one **Total sale price** and let ResellFlow split it
-     across the items by value. You can adjust any line afterwards.
+   - **A bundle:** price each item, or switch to **One total (lot)** and enter the single price
+     the buyer paid. ResellFlow splits it across the items by **what each one cost you**, so every
+     item shows the bundle's real return (a $1 item won't look like a 6,000% winner). If you know
+     what one item really sold for, type it on that line: it's kept, and the rest of the total
+     splits around it.
 5. Check the **fees**. They're calculated from your Settings for the chosen platform, and you can
    type over any of them (shipping, eBay fee, Mercari fee, ad fee). The form shows an
    **estimated net** before you save.
@@ -175,6 +178,16 @@ still counts against your profit, which keeps the numbers honest.
 
 The items are marked **Sold**, and their profit flows into the item, its lot, the dashboard and
 reports automatically. To fix a mistake, find the sale on the **Sales** page and edit or delete it.
+
+Bundle sales are tagged **bundle** on the Sales page, and each line says whether its price is a
+**share of bundle** or a **price set** by you. The split stays up to date: if you later change an
+item's or lot's cost, the bundle re-splits automatically. In **Edit sale** you can change the
+bundle total, re-split every line by cost, or switch a sale between bundle and item-by-item pricing.
+
+**Sales from before bundle tracking:** if you see a "multi-item sales to review" banner on the
+Sales page, click **Review**. Sales where every item got the same price (an old even split) can be
+converted in one click. For the rest, tick the ones that were sold as one bundle price. Converting
+never changes a sale's total, only how it's divided between the items.
 
 ---
 
@@ -221,7 +234,10 @@ The **Dashboard** is your business at a glance. Pick a time frame at the top (**
 
 For deeper analysis, open **Analytics**:
 - **Reports**: profit & loss; breakdowns by location, platform, source and expense category
-- **Insights**: what to buy more of, ranked by a blended score, total profit, ROI, how often it sells, or how fast
+- **Insights**: what to buy more of, ranked by a blended score, total profit, ROI, how often it sells, or how fast.
+  Items sold in bundles are tagged (for example "2 in bundles"), and **Individual only** shows numbers from
+  single-item sales alone. An ROI from fewer than 3 sales is marked **few sales** and ranks below items with
+  enough history.
 - **Trends**: which month each category sells best in
 
 ---
