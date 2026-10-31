@@ -65,7 +65,7 @@ services:
       - net_admin
     volumes:
       - ${APPDATA:?APPDATA is not set}/reselling-app/tailscale:/var/lib/tailscale
-      - ./serve.json:/config/serve.json:ro
+      - ./deploy/serve.json:/config/serve.json:ro
     restart: unless-stopped
 
   # Optional HTTPS reverse proxy. Only starts with the "https" profile:
@@ -83,7 +83,7 @@ services:
       - "443:443"
       - "80:80"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
 

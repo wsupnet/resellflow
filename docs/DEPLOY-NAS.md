@@ -230,7 +230,7 @@ shell history).
 
 `docker-compose.yml` already includes a `tailscale` service (profile `ts`) that
 shares the app's network and serves it over HTTPS with a trusted cert — no host
-ports needed, works remotely. It uses the repo's `./serve.json` and keeps its
+ports needed, works remotely. It uses the repo's `./deploy/serve.json` and keeps its
 state in `$APPDATA/reselling-app/tailscale`.
 
 1. In the Tailscale admin console, create a **reusable auth key**.

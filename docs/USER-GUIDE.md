@@ -5,7 +5,7 @@ selling, tracking expenses, checking deals in the store, and backing up your dat
 
 New to ResellFlow? Read the [Overview](OVERVIEW.md) first for the big picture, or watch the
 [90-second demo video](demo/resellflow-demo.mp4) to see the main tasks below being done.
-Setting it up? See the [README](../README.md#quick-start) or [Hosting on a NAS](../DEPLOY-NAS.md).
+Setting it up? See the [README](../README.md#quick-start) or [Hosting on a NAS](DEPLOY-NAS.md).
 
 **Contents**
 
@@ -33,11 +33,11 @@ Setting it up? See the [README](../README.md#quick-start) or [Hosting on a NAS](
 
 > **Forgot your password?** You can't reset it from the app. Ask whoever runs the server, or
 > run the reset script yourself. See
-> [Passwords & lockout](../DEPLOY-NAS.md#9-passwords--lockout).
+> [Passwords & lockout](DEPLOY-NAS.md#9-passwords--lockout).
 
 **On your phone:** open the same address and use your browser's *Add to Home Screen*.
 ResellFlow then opens like an app. The barcode camera needs **HTTPS** (or `localhost`); see the
-HTTPS section of [Hosting on a NAS](../DEPLOY-NAS.md).
+HTTPS section of [Hosting on a NAS](DEPLOY-NAS.md).
 
 ---
 
@@ -263,7 +263,7 @@ it's safe to run on a live account.
 ### Server-level backups
 
 For a full database dump and photo copy from the server itself (for example on a NAS schedule), see
-[Backups & persistence](../DEPLOY-NAS.md#7-backups--persistence).
+[Backups & persistence](DEPLOY-NAS.md#7-backups--persistence).
 
 ---
 

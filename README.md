@@ -1,7 +1,7 @@
 # ResellFlow
 
 **[Overview](docs/OVERVIEW.md)** · **[User guide](docs/USER-GUIDE.md)** · [Quick start](#quick-start) ·
-[Hosting on a NAS](DEPLOY-NAS.md) · [How the money math works](#how-the-money-math-works) ·
+[Hosting on a NAS](docs/DEPLOY-NAS.md) · [How the money math works](#how-the-money-math-works) ·
 [Common commands](#common-commands)
 
 [![ResellFlow demo: adding a lot, recording a bundle sale, analytics and the Deal Checker](docs/demo/resellflow-demo.gif)](docs/demo/resellflow-demo.mp4)
@@ -55,8 +55,8 @@ Facebook. Built to solve the things a spreadsheet can't:
 | [Demo video](docs/demo/resellflow-demo.mp4) | A 90-second walkthrough of the main features (demo data) |
 | [User guide](docs/USER-GUIDE.md) | Step by step: first login, adding items and lots, sales, expenses, the dashboard, Deal Checker, backups |
 | [Quick start](#quick-start) | Run it locally with Docker in a few minutes |
-| [Hosting on a NAS](DEPLOY-NAS.md) | Synology / QNAP / UGREEN / Unraid setup, HTTPS for the phone camera, backups, updates |
-| [Passwords & lockout](DEPLOY-NAS.md#9-passwords--lockout) | Changing your password, and resetting it from the server if you're locked out |
+| [Hosting on a NAS](docs/DEPLOY-NAS.md) | Synology / QNAP / UGREEN / Unraid setup, HTTPS for the phone camera, backups, updates |
+| [Passwords & lockout](docs/DEPLOY-NAS.md#9-passwords--lockout) | Changing your password, and resetting it from the server if you're locked out |
 | [Inviting family & friends](#inviting-family--friends) | Invite-only accounts with private data per user |
 | [Importing your existing data](#importing-your-existing-data) | CSV import and backup restore |
 | [How the money math works](#how-the-money-math-works) | How lot costs, fees and ROI are calculated |
@@ -90,7 +90,7 @@ Data is kept in plain folders outside the containers, under `APPDATA` from `.env
 | `$APPDATA/reselling-app/tailscale` | `tailscale:/var/lib/tailscale` | Tailscale state (`ts` profile only) |
 
 Locally `APPDATA=./dev-data` (git-ignored). On the NAS it's
-`/volume1/docker/appdata` — see [Hosting on a NAS](DEPLOY-NAS.md).
+`/volume1/docker/appdata` — see [Hosting on a NAS](docs/DEPLOY-NAS.md).
 
 ### Important: keep `DATABASE_URL` and `POSTGRES_*` in sync
 
