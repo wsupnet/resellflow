@@ -212,7 +212,7 @@ export default function LotBuilder({ rate, locations = [], defaultCurrency = "JP
         setCard((c) => ({ ...c, sku: code, title: c.title || d.title }));
         setLookupMsg(`Found via ${d.source ?? "lookup"}: ${d.title}. Pick a category to finish.`);
       } else if (d.enabled === false) {
-        setLookupMsg("New code — enter name + category. (Enable UPC lookup in Settings to auto-name retail items.)");
+        setLookupMsg("New code — enter name + category. (Turn on “Look up unknown barcodes online” in Settings to auto-name retail items.)");
       } else {
         setLookupMsg("New code — enter the name + category to add it to your catalog.");
       }

@@ -1,7 +1,7 @@
 # ResellFlow
 
 **[Overview](docs/OVERVIEW.md)** · **[User guide](docs/USER-GUIDE.md)** · [Quick start](#quick-start) ·
-[Hosting on a NAS](docs/DEPLOY-NAS.md) · [How the money math works](#how-the-money-math-works) ·
+[Hosting on a NAS](docs/DEPLOY-NAS.md) · [Security & privacy](#security--privacy) · [How the money math works](#how-the-money-math-works) ·
 [Common commands](#common-commands)
 
 [![ResellFlow demo: adding a lot, recording a bundle sale, analytics and the Deal Checker](docs/demo/resellflow-demo.gif)](docs/demo/resellflow-demo.mp4)
@@ -18,7 +18,8 @@ Facebook. Built to solve the things a spreadsheet can't:
   items from a different lot**.
 - **Real P&L.** Gross, fees (eBay / Mercari / ad / shipping), net, and ROI — at
   the item, lot, and portfolio level, with monthly charts.
-- **Good-deal checker.** Live yen↔USD converter plus a verdict on whether you're
+- **Good-deal checker.** Yen↔USD converter (your own rate, or fetched if you opt
+  in) plus a verdict on whether you're
   over/underpaying, based on your own sale history or a comp you paste in.
 - **Buy-more insights.** Ranks what you should source more of by a blended score,
   with toggles to view by total profit, ROI, or how often it sells.
@@ -26,8 +27,8 @@ Facebook. Built to solve the things a spreadsheet can't:
   camera (or type it) to tag any item; items sharing a code are treated as one
   product so the "times sold" count is accurate even when names differ. Scan on
   the add-item form, the item editor, or the Deal Checker (scan in-store to pull
-  up your history). Optional UPC-database name auto-fill (Settings, off by
-  default). **Camera needs HTTPS or localhost** (browser requirement).
+  up your history). Optional online name lookup for unknown barcodes (Settings,
+  off by default). **Camera needs HTTPS or localhost** (browser requirement).
 - **General ledger.** Record business expenses that aren't item purchases —
   import fees, commissions, supplies — and attach them to a lot, item, or sale (or
   leave them general). They reduce net and count toward ROI like fees.
@@ -56,6 +57,7 @@ Facebook. Built to solve the things a spreadsheet can't:
 | [User guide](docs/USER-GUIDE.md) | Step by step: first login, adding items and lots, sales, expenses, the dashboard, Deal Checker, backups |
 | [Quick start](#quick-start) | Run it locally with Docker in a few minutes |
 | [Hosting on a NAS](docs/DEPLOY-NAS.md) | Synology / QNAP / UGREEN / Unraid setup, HTTPS for the phone camera, backups, updates |
+| [Security & privacy](#security--privacy) | What leaves your server (nothing, by default), who can reach the app, and how it's protected |
 | [Passwords & lockout](docs/DEPLOY-NAS.md#9-passwords--lockout) | Changing your password, and resetting it from the server if you're locked out |
 | [Inviting family & friends](#inviting-family--friends) | Invite-only accounts with private data per user |
 | [Importing your existing data](#importing-your-existing-data) | CSV import and backup restore |
@@ -67,8 +69,9 @@ You only need **Docker** installed.
 
 ```bash
 cp .env.example .env
-# edit .env: set strong POSTGRES_PASSWORD, AUTH_SECRET, and your ADMIN_EMAIL/PASSWORD
-#   AUTH_SECRET:  openssl rand -base64 48
+# edit .env: set a strong POSTGRES_PASSWORD and your ADMIN_EMAIL / ADMIN_PASSWORD
+# (12+ characters; the stack won't start while ADMIN_PASSWORD is blank or an
+# example value). AUTH_SECRET is generated for you on first boot.
 # APPDATA=./dev-data is already set for local use
 
 docker compose up -d --build
@@ -77,6 +80,14 @@ docker compose up -d --build
 Open <http://localhost:3939> (or whatever `APP_PORT` is) and sign in with the
 `ADMIN_EMAIL` / `ADMIN_PASSWORD` you set. The database schema and the admin
 account are created automatically on first boot.
+
+By default the app only answers on the computer running it, so nobody else on
+your Wi-Fi can reach the login page. To open it from other devices by IP (a NAS,
+or your phone on the same network), set `APP_BIND=0.0.0.0` in `.env` and run
+`docker compose up -d` again.
+
+See [Security & privacy](#security--privacy) for what the app sends out (nothing,
+by default) and how it's locked down.
 
 ### Where the data lives
 
@@ -87,6 +98,7 @@ Data is kept in plain folders outside the containers, under `APPDATA` from `.env
 |---|---|---|
 | `$APPDATA/reselling-app/postgres` | `db:/var/lib/postgresql/data` | Postgres database (in `pgdata/`) |
 | `$APPDATA/reselling-app/uploads` | `app:/app/uploads` | Item photos |
+| `$APPDATA/reselling-app/secrets` | `app:/app/secrets` | Generated `AUTH_SECRET` (keep private) |
 | `$APPDATA/reselling-app/tailscale` | `tailscale:/var/lib/tailscale` | Tailscale state (`ts` profile only) |
 
 Locally `APPDATA=./dev-data` (git-ignored). On the NAS it's
@@ -97,6 +109,78 @@ Locally `APPDATA=./dev-data` (git-ignored). On the NAS it's
 `DATABASE_URL` (used by the app) must contain the same user/password/db as the
 `POSTGRES_*` values (used by the database). The default `.env.example` already
 lines them up — just change the password in both places.
+
+### Updates that change the database
+
+On every start the app brings the database up to date with the code. Changes
+that only **add** things (new tables, new settings with defaults) apply on their
+own. If an update would **delete** data — say a column is removed — the app
+refuses, leaves the database untouched, and stops with this in
+`docker compose logs app`:
+
+```
+  ✗ Database update stopped - nothing was changed (see the error above).
+```
+
+Nothing is lost at that point. To go ahead once you've read what it would drop:
+
+```bash
+docker compose exec -T db pg_dump -U resell -d resellflow > resellflow-before-update.sql  # back up first
+docker compose run --rm app node_modules/.bin/prisma db push --skip-generate --accept-data-loss  # apply it
+docker compose up -d                                                                      # start normally
+```
+
+Or roll back the code (`git checkout <previous version>`) and rebuild.
+
+## Security & privacy
+
+**Nothing leaves your server unless you turn it on.** Two per-account settings
+reach outside services, and both are off by default:
+
+| Setting | Sends | To |
+|---|---|---|
+| *Fetch today's rate automatically* | A request for the USD/JPY rate (no data of yours), about hourly | open.er-api.com |
+| *Look up unknown barcodes online* | The scanned barcode, for codes not already in your catalog | OpenLibrary, MusicBrainz, UPCitemdb |
+
+An admin can block rate fetching for everyone with `FX_API_URL=` (empty) in
+`.env`. Next.js and Prisma telemetry are disabled in the Docker image. Every
+outside service sees your server's IP address when it's used.
+
+That's while the app runs. **Building** it (`docker compose up --build`) downloads
+the usual software: Docker images, Debian packages, npm packages, and Prisma's
+database engine from `binaries.prisma.sh`. No data of yours is involved.
+
+**Who can reach it.** Only the computer running it, unless `APP_BIND=0.0.0.0`
+opens the port to your network. The optional Caddy HTTPS profile (`--profile
+https`) is the exception: it always publishes ports 80 and 443 on **every**
+network interface, whatever `APP_BIND` says — that's how phones on your Wi-Fi
+reach it. For use away from home, prefer Tailscale (the `ts` profile) to
+forwarding a port on your router — the app isn't meant to face the open internet.
+
+**How it's protected:**
+
+- Login sessions are signed with `AUTH_SECRET` (generated per install; example
+  placeholders and short secrets are refused). *Settings → Account → Sign out of
+  all devices* revokes every session for an account.
+- 10 wrong passwords pauses sign-in for that account for 15 minutes, however the
+  email is spelled. Browsers that have signed in to the account before keep a
+  separate budget, so someone hammering your account can't lock you out of your
+  own devices. Behind your own reverse proxy, set `TRUST_PROXY=1` to also limit
+  failures per client IP (see `.env.example` for when that's safe). Passwords are
+  at least 12 characters and stored as bcrypt hashes; the first admin can't be
+  created with an example password.
+- Each user's records, photos and exports are only ever served to that user.
+  Backup restores only touch the restoring user's own records and photos, are
+  size-limited, and only accept photos in the app's own format.
+- CSV exports neutralise spreadsheet formulas (`=`, `+`, `-`, `@`).
+- Security headers block framing, content sniffing, and cross-site form posts
+  to sign-in, sign-up and sign-out.
+- The app container runs with a read-only filesystem, almost no Linux
+  capabilities and no privilege escalation; updates never delete database data
+  without you confirming it ([details](#updates-that-change-the-database)).
+
+Found a problem? Open an issue on the repository (no exploit details in public,
+please — say there's a security issue and how to reach you).
 
 ## Inviting family & friends
 
@@ -126,8 +210,8 @@ the templates there for the exact columns), or restore a full ResellFlow backup
   are excluded from **Flip ROI** and per-item ROI — a return on a $0 cost basis is
   meaningless and would otherwise show up as a misleading "high ROI" winner.
 - All reporting is in **USD**. Each purchase also stores the yen amount and the
-  locked exchange rate you paid; the live rate is only used for the shopping
-  calculator.
+  locked exchange rate you paid; today's rate (your manual rate, or fetched if
+  you opt in) is only used for the shopping calculator and yen display.
 - Fee percentages are **editable** in Settings. Past sales keep the fees they were
   recorded with, so changing rates never rewrites history.
 
@@ -147,7 +231,7 @@ the templates there for the exact columns), or restore a full ResellFlow backup
 
 ## Tech
 
-Next.js 14 (App Router) · PostgreSQL · Prisma · Tailwind · Recharts. Auth is a
+Next.js 15 (App Router) · PostgreSQL · Prisma · Tailwind · Recharts. Auth is a
 signed httpOnly session cookie (`jose` + `bcryptjs`). Installable as a PWA for
 phone use while sourcing.
 

@@ -16,11 +16,11 @@ export const viewport: Viewport = {
 
 const THEMES = ["light", "cream", "dark", "system"];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Theme is applied server-side from the cookie so there's no flash of the
   // wrong theme. The cookie is set when saving Settings (and synced by
   // ThemeSync for a fresh device). "system" follows the device via CSS.
-  const raw = cookies().get("theme")?.value ?? "light";
+  const raw = (await cookies()).get("theme")?.value ?? "light";
   const theme = THEMES.includes(raw) ? raw : "light";
   return (
     <html lang="en" data-theme={theme}>

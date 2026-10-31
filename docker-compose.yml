@@ -19,6 +19,8 @@ services:
       timeout: 5s
       retries: 12
       start_period: 45s
+    security_opt:
+      - no-new-privileges:true
 
   app:
     # Builds on the host from source. Needs a .env (copy .env.example) — the
@@ -32,15 +34,40 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
-      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      # Optional: leave unset and a random one is generated on first boot and kept
+      # in $APPDATA/reselling-app/secrets. Placeholder/short values are refused.
+      AUTH_SECRET: ${AUTH_SECRET:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
-      FX_API_URL: ${FX_API_URL:-https://open.er-api.com/v6/latest/USD}
+      # Only used by accounts that turn on "Fetch today's rate". Set empty to disable
+      # fetching server-wide (unset = default provider).
+      FX_API_URL: ${FX_API_URL-https://open.er-api.com/v6/latest/USD}
+      # Set to 1 only when every visitor reaches the app through a reverse proxy you
+      # run (the Caddy or Tailscale profiles, with APP_BIND left at 127.0.0.1); then
+      # sign-in throttling also counts failures per client IP.
+      TRUST_PROXY: ${TRUST_PROXY:-}
       NODE_ENV: production
     ports:
-      - "${APP_PORT:-3939}:3000"
+      # Published on this machine only (127.0.0.1) by default, so other devices on
+      # the same Wi-Fi/LAN can't reach the login page. To use it from other devices
+      # by IP (e.g. http://<NAS-IP>:3939), set APP_BIND=0.0.0.0 in .env. The
+      # Tailscale sidecar doesn't need this — it reaches the app internally.
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3939}:3000"
+    # Least privilege: root inside the container (some NAS setups need it to read
+    # /app), but with only the file-permission capabilities it uses, no privilege
+    # escalation, and a read-only filesystem apart from the data mounts + scratch.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /root
+      - /app/.next/cache
     volumes:
       - ${APPDATA:?APPDATA is not set}/reselling-app/uploads:/app/uploads
+      - ${APPDATA:?APPDATA is not set}/reselling-app/secrets:/app/secrets
 
   # Optional: Tailscale HTTPS for the phone camera. Trusted cert, works anywhere.
   # Starts only with the "ts" profile:
@@ -50,7 +77,8 @@ services:
   #        docker compose --profile ts up -d
   #   4) open https://resellflow.<your-tailnet>.ts.net on your phone
   tailscale:
-    image: tailscale/tailscale:latest
+    # Minor version pinned (still gets patch releases); bump deliberately.
+    image: tailscale/tailscale:v1.104
     profiles: ["ts"]
     # Shares the app's network so it can serve http://127.0.0.1:3000 over HTTPS.
     network_mode: service:app
@@ -72,7 +100,7 @@ services:
   #   SITE_ADDRESS=192.168.x.x docker compose --profile https up -d
   # Needed for the phone camera (barcode scanner requires a secure context).
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11-alpine
     restart: unless-stopped
     profiles: ["https"]
     depends_on:

@@ -3,10 +3,9 @@ import { getFinancials } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 import { resolveRange, normalizePeriod } from "@/lib/period";
 import { getMoney } from "@/lib/money";
+import { photoPath } from "@/lib/uploads";
+import { neutralizeFormula } from "@/lib/csv";
 import fs from "fs";
-import path from "path";
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 
 /** Full-fidelity JSON backup of the user's records (everything except photo files,
  *  which live on the uploads volume; photo metadata is included so surviving files
@@ -39,7 +38,8 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 function csvCell(v: unknown): string {
   if (v == null) return "";
-  const s = String(v);
+  // Numbers (incl. negative net/ROI) stay numeric; only text can smuggle a formula.
+  const s = typeof v === "number" ? String(v) : neutralizeFormula(String(v));
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 function toCsv(headers: string[], rows: (unknown[])[]): string {
@@ -94,9 +94,9 @@ export async function GET(req: Request) {
     const zip = new AdmZip();
     zip.addFile("backup.json", Buffer.from(JSON.stringify(backup, null, 2)));
     for (const ph of backup.data.photos) {
-      for (const suffix of [".jpg", ".thumb.jpg"]) {
-        const fp = path.join(UPLOAD_DIR, `${ph.id}${suffix}`);
-        if (fs.existsSync(fp)) zip.addLocalFile(fp);
+      for (const thumb of [false, true]) {
+        const fp = photoPath(ph.id, thumb);
+        if (fp && fs.existsSync(fp)) zip.addLocalFile(fp);
       }
     }
     const date = new Date().toISOString().slice(0, 10);

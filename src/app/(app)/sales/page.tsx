@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getFinancials } from "@/lib/queries";
 import { tracksCondition } from "@/lib/catalog";
-import { getUsdToJpy } from "@/lib/fx";
+import { getFxRate } from "@/lib/fx";
 import { deleteSale, updateSale } from "@/lib/actions";
 import ConfirmButton from "@/components/ConfirmButton";
 import { sortRows, dirOf } from "@/lib/sort";
@@ -17,13 +17,14 @@ import { getMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-export default async function SalesPage({
-  searchParams
-}: {
-  searchParams: { platform?: string; sort?: string; dir?: string; page?: string; per?: string };
-}) {
+export default async function SalesPage(
+  props: {
+    searchParams: Promise<{ platform?: string; sort?: string; dir?: string; page?: string; per?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
-  const [bundle, fx, m] = await Promise.all([getFinancials(user.id), getUsdToJpy(), getMoney(user.id)]);
+  const [bundle, fx, m] = await Promise.all([getFinancials(user.id), getFxRate(user.id), getMoney(user.id)]);
 
   let settings = await prisma.settings.findUnique({ where: { userId: user.id } });
   if (!settings) settings = await prisma.settings.create({ data: { userId: user.id } });
@@ -100,7 +101,7 @@ export default async function SalesPage({
     net: (r) => r.net
   };
   const sortedSales = sortRows(saleRows, getters[sort] ?? getters.date, dir);
-  const per = resolvePer(searchParams.per, cookies().get("pageSize")?.value);
+  const per = resolvePer(searchParams.per, (await cookies()).get("pageSize")?.value);
   const pg = paginate(sortedSales, searchParams.page, per);
 
   return (

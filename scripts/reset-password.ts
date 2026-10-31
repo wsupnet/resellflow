@@ -13,6 +13,7 @@
 import readline from "readline";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword, passwordProblem } from "../src/lib/password";
+import { normalizeEmail } from "../src/lib/email";
 
 const prisma = new PrismaClient();
 
@@ -48,7 +49,7 @@ async function main() {
     return;
   }
 
-  const user = await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
+  const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
   if (!user) {
     console.error(`No account with email ${email}. Run without an email to list accounts.`);
     process.exitCode = 1;

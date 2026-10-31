@@ -6,6 +6,7 @@ import { SectionTitle } from "@/components/ui";
 import ImportPanel from "@/components/ImportPanel";
 import ConfirmButton from "@/components/ConfirmButton";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
+import SignOutEverywhere from "@/components/SignOutEverywhere";
 import { shortDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -68,13 +69,29 @@ export default async function SettingsPage() {
           <div>
             <label className="label">Yen conversion</label>
             <select name="fxMode" defaultValue={settings.fxMode} className="input">
-              <option value="live">Live — today&apos;s rate</option>
+              <option value="live">Current — today&apos;s rate (below)</option>
               <option value="historical">Historical — rate locked at each transaction</option>
             </select>
             <p className="mt-1 text-xs text-slate-400">
-              Live converts everything at the current rate. Historical uses the ¥/$ rate recorded when each item was bought/sold (falls back to live for older records without a locked rate).
+              Current converts everything at today&apos;s rate. Historical uses the ¥/$ rate recorded when each item was bought/sold (falls back to today&apos;s rate for older records without a locked rate).
             </p>
           </div>
+          <div>
+            <label className="label">Today&apos;s rate (¥ per $1)</label>
+            <input name="fxManualRate" inputMode="decimal" defaultValue={String(settings.fxManualRate)} className="input" />
+            <p className="mt-1 text-xs text-slate-400">Used for yen conversions and the deal calculator unless you turn on fetching below.</p>
+          </div>
+          <label className="sm:col-span-2 flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm">
+            <input type="checkbox" name="fxLive" defaultChecked={settings.fxLive} className="mt-0.5" />
+            <span>
+              <span className="font-medium">Fetch today&apos;s rate automatically</span>
+              <span className="block text-xs text-slate-500">
+                When on, this server asks open.er-api.com (a free exchange-rate service) for the USD/JPY rate about once an
+                hour. Only the request leaves — none of your data — but that service sees your server&apos;s IP address. Off
+                means nothing is sent and the rate above is used.
+              </span>
+            </span>
+          </label>
           <div>
             <label className="label">Theme</label>
             <select name="theme" defaultValue={settings.theme} className="input">
@@ -90,10 +107,12 @@ export default async function SettingsPage() {
           <label className="sm:col-span-2 flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm">
             <input type="checkbox" name="upcLookup" defaultChecked={settings.upcLookup} className="mt-0.5" />
             <span>
-              <span className="font-medium">Auto-fill item name from scanned barcode</span>
+              <span className="font-medium">Look up unknown barcodes online</span>
               <span className="block text-xs text-slate-500">
-                When on, scanning a barcode queries an external UPC database to pre-fill the name. Most Japanese Book Off items
-                aren&apos;t listed, so leave off unless you scan retail UPC/EAN goods.
+                Barcodes you&apos;ve scanned before are always matched from your own catalog, privately. When this is on, a
+                barcode that isn&apos;t in your catalog is also sent to outside services to pre-fill the name: OpenLibrary
+                (books), MusicBrainz (music) and UPCitemdb (retail goods). They see the barcode and your server&apos;s IP
+                address, which can reveal what you&apos;re buying. Most Japanese Book Off items aren&apos;t listed anyway.
               </span>
             </span>
           </label>
@@ -186,6 +205,9 @@ export default async function SettingsPage() {
           Signed in as <b>{user.email}</b>{user.isAdmin ? " (admin)" : ""}. Changing your password signs out every other device.
         </p>
         <ChangePasswordForm />
+        <div className="mt-6 border-t border-slate-100 pt-4">
+          <SignOutEverywhere />
+        </div>
       </div>
     </div>
   );

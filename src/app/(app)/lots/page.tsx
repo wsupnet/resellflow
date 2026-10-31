@@ -12,11 +12,12 @@ import { getMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-export default async function LotsPage({
-  searchParams
-}: {
-  searchParams: { source?: string; type?: string; sort?: string; dir?: string; page?: string; per?: string };
-}) {
+export default async function LotsPage(
+  props: {
+    searchParams: Promise<{ source?: string; type?: string; sort?: string; dir?: string; page?: string; per?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   const [bundle, locationList, m] = await Promise.all([getFinancials(user.id), listLocations(user.id), getMoney(user.id)]);
   let lots = summarizeLots(bundle);
@@ -46,7 +47,7 @@ export default async function LotsPage({
   };
   lots = sortRows(lots, getters[sort] ?? getters.date, dir);
 
-  const per = resolvePer(searchParams.per, cookies().get("pageSize")?.value);
+  const per = resolvePer(searchParams.per, (await cookies()).get("pageSize")?.value);
   const pg = paginate(lots, searchParams.page, per);
 
   return (

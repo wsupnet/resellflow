@@ -64,6 +64,11 @@ model Settings {
   homeCurrency    String  @default("USD")
   fxMode          String  @default("live")
 
+  // The "current" USD/JPY rate. Off by default for privacy: the manual rate is used
+  // and nothing leaves the server. On = fetched hourly from FX_API_URL.
+  fxLive          Boolean @default(false)
+  fxManualRate    Float   @default(150)
+
   // UI theme: "light" | "cream" | "dark" | "system" (follows device preference).
   theme           String  @default("light")
 }

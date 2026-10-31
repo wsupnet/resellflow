@@ -178,7 +178,7 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
           ))}
         </div>
         {isYen && (
-          <p className="mt-1 text-xs text-slate-400">Converted to USD at the live rate (≈ ¥{rate.toFixed(1)} / $1) when saved.</p>
+          <p className="mt-1 text-xs text-slate-400">Converted to USD at today&apos;s rate (≈ ¥{rate.toFixed(1)} / $1, set in Settings) when saved.</p>
         )}
       </div>
 

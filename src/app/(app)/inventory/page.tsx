@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
 import { getFinancials, listLocations } from "@/lib/queries";
-import { getUsdToJpy } from "@/lib/fx";
+import { getFxRate } from "@/lib/fx";
 import { sortRows, dirOf } from "@/lib/sort";
 import { variantKey, tracksCondition } from "@/lib/catalog";
 import AddInventory from "@/components/AddInventory";
@@ -20,13 +20,14 @@ import { getMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-export default async function InventoryPage({
-  searchParams
-}: {
-  searchParams: { status?: string; q?: string; source?: string; type?: string; sort?: string; dir?: string; view?: string; missing?: string; location?: string; age?: string; category?: string; condition?: string; result?: string; roi?: string; page?: string; per?: string };
-}) {
+export default async function InventoryPage(
+  props: {
+    searchParams: Promise<{ status?: string; q?: string; source?: string; type?: string; sort?: string; dir?: string; view?: string; missing?: string; location?: string; age?: string; category?: string; condition?: string; result?: string; roi?: string; page?: string; per?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
-  const [bundle, fx, locations, m] = await Promise.all([getFinancials(user.id), getUsdToJpy(), listLocations(user.id), getMoney(user.id)]);
+  const [bundle, fx, locations, m] = await Promise.all([getFinancials(user.id), getFxRate(user.id), listLocations(user.id), getMoney(user.id)]);
   const locationNames = locations.map((l) => l.name);
 
   // "Sold N× before" counts per variant (product, or product+condition for
@@ -228,7 +229,7 @@ export default async function InventoryPage({
   rows = sortRows(rows, getters[sort] ?? getters.added, dir);
 
   // Pagination (both views share the page/per params; filters & sorting reset page).
-  const per = resolvePer(searchParams.per, cookies().get("pageSize")?.value);
+  const per = resolvePer(searchParams.per, (await cookies()).get("pageSize")?.value);
   const pgItems = paginate(rows, searchParams.page, per);
   const pgProducts = paginate(products, searchParams.page, per);
 

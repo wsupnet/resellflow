@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
 import { getFinancials } from "@/lib/queries";
-import { getUsdToJpy } from "@/lib/fx";
+import { getFxRate } from "@/lib/fx";
 import ExpenseForm, { type AttachOption } from "@/components/ExpenseForm";
 import ExpenseEditRow from "@/components/ExpenseEditRow";
 import { FilterSelect, Pagination } from "@/components/TableControls";
@@ -15,13 +15,14 @@ export const dynamic = "force-dynamic";
 
 const CATEGORIES = ["Commission", "Import Fee", "Customs/Duty", "Supplies", "Shipping", "Subscription", "Mileage", "Other"];
 
-export default async function LedgerPage({
-  searchParams
-}: {
-  searchParams: { category?: string; sort?: string; dir?: string; page?: string; per?: string };
-}) {
+export default async function LedgerPage(
+  props: {
+    searchParams: Promise<{ category?: string; sort?: string; dir?: string; page?: string; per?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
-  const [bundle, m, fx] = await Promise.all([getFinancials(user.id), getMoney(user.id), getUsdToJpy()]);
+  const [bundle, m, fx] = await Promise.all([getFinancials(user.id), getMoney(user.id), getFxRate(user.id)]);
 
   // Build attach options + a lookup for labels.
   const attachOptions: AttachOption[] = [{ value: "", label: "General business expense", group: "General" }];
@@ -59,7 +60,7 @@ export default async function LedgerPage({
     category: (e) => e.category
   };
   expenses = sortRows(expenses, getters[sort] ?? getters.date, dir);
-  const per = resolvePer(searchParams.per, cookies().get("pageSize")?.value);
+  const per = resolvePer(searchParams.per, (await cookies()).get("pageSize")?.value);
   const pg = paginate(expenses, searchParams.page, per);
 
   // amountUsd is signed: positive = expense (reduces net), negative = credit/income (adds to net).

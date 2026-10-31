@@ -56,11 +56,12 @@ const METRIC_INFO: Record<Metric, { title: string; blurb: string }> = {
   }
 };
 
-export default async function BreakdownPage({
-  searchParams
-}: {
-  searchParams: { metric?: string; period?: string; page?: string; per?: string };
-}) {
+export default async function BreakdownPage(
+  props: {
+    searchParams: Promise<{ metric?: string; period?: string; page?: string; per?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   const [bundle, m] = await Promise.all([getFinancials(user.id), getMoney(user.id)]);
 
@@ -172,7 +173,7 @@ export default async function BreakdownPage({
 
   // Only the table body paginates — the header cards, footer totals, and grand
   // total are ALWAYS the full set so they keep reconciling to the dashboard card.
-  const perPage = resolvePer(searchParams.per, cookies().get("pageSize")?.value);
+  const perPage = resolvePer(searchParams.per, (await cookies()).get("pageSize")?.value);
   const pg = paginate(rows, searchParams.page, perPage);
 
   return (

@@ -20,16 +20,22 @@ Setting it up? See the [README](../README.md#quick-start) or [Hosting on a NAS](
 9. [Use the Deal Checker in the store](#9-use-the-deal-checker-in-the-store)
 10. [Back up and restore your data](#10-back-up-and-restore-your-data)
 11. [Invite family and friends](#11-invite-family-and-friends)
+12. [Privacy and security](#12-privacy-and-security)
 
 ---
 
 ## 1. First login
 
-1. Open the app in your browser, for example `http://localhost:3939` or `http://<NAS-IP>:3939`.
+1. Open the app in your browser, for example `http://localhost:3939` or `http://<NAS-IP>:3939`
+   (opening it by IP from another device needs `APP_BIND=0.0.0.0` in `.env`).
 2. Sign in with the `ADMIN_EMAIL` and `ADMIN_PASSWORD` from your `.env`. This account is
    created automatically the first time the app starts.
 3. **Change your password right away:** **Settings → Account**. Enter your current password,
    then the new one twice (at least 12 characters). Changing it signs out any other devices.
+
+After 10 wrong passwords for the same account, sign-in pauses for 15 minutes. That slows down
+anyone guessing; just wait it out if it was you. Browsers and phones you've signed in on before
+have their own allowance, so a stranger guessing at your account can't lock you out of them.
 
 > **Forgot your password?** You can't reset it from the app. Ask whoever runs the server, or
 > run the reset script yourself. See
@@ -53,10 +59,16 @@ Do this once, before you record sales, so fees are calculated correctly.
    - **Default shipping ($)**
 3. Pick your display options:
    - **Default display currency**: USD or yen. You can flip it any time with the **$ / ¥** toggle in the top bar.
-   - **Yen conversion**: *Live* (today's rate) or *Historical* (the rate locked in on each purchase or sale)
+   - **Yen conversion**: *Current* (today's rate) or *Historical* (the rate locked in on each purchase or sale)
+   - **Today's rate (¥ per $1)**: the rate used for yen amounts, the entry forms and the Deal Checker.
+     Update it now and then, or tick **Fetch today's rate automatically** to have the server get it
+     about once an hour from open.er-api.com (a free exchange-rate service). Off by default: when
+     it's off, nothing is sent anywhere.
    - **Theme**: Light, Off-white, Dark, or follow your device
-4. Optional: **Auto-fill item name from scanned barcode** looks up retail, book and music
-   barcodes online. It's off by default.
+4. Optional: **Look up unknown barcodes online.** Barcodes you've scanned before always fill in
+   from your own catalog, privately. With this on, a barcode that isn't in your catalog is also
+   sent to OpenLibrary (books), MusicBrainz (music) and UPCitemdb (retail) to suggest a name. Off by
+   default.
 5. Click **Save settings**.
 
 Changing fee rates later never rewrites past sales. Each sale keeps the fees it was recorded with.
@@ -79,7 +91,7 @@ For anything you bought on its own.
      grouped as one product, so your "times sold" history stays accurate.
    - **Category** and **Source** (Book Off, thrift store, estate sale, and so on)
    - **Purchased** date and **Location** (optional)
-   - **Cost**: enter **Yen cost (¥)** and the USD cost fills in from the live rate, or enter
+   - **Cost**: enter **Yen cost (¥)** and the USD cost fills in from today's rate (set in Settings), or enter
      **USD cost ($)** directly. Add **Tax** if any.
    - **Est. resale value ($)** (optional, but it helps cost splitting and reports before the item sells)
    - **Notes**
@@ -252,11 +264,15 @@ Back up regularly, and always before updating the app.
 
 **To restore:** on the same screen, choose the backup file (`.zip` or `.json`) and click **Restore**.
 Restoring **only adds missing records**. It never deletes or overwrites what's already there, so
-it's safe to run on a live account.
+it's safe to run on a live account. Photos in a `.zip` are only restored for items in your own
+account, and only if they're photos as ResellFlow saves them (JPEG, at most 1600 px). Anything
+else in the file is skipped.
 
 ### CSV export and import
 
-- **Export CSV**: Inventory, Sales, Lots or Expenses, handy for spreadsheets or taxes.
+- **Export CSV**: Inventory, Sales, Lots or Expenses, handy for spreadsheets or taxes. Text that
+  starts with `=`, `+`, `-` or `@` gets a leading `'` so Excel or Sheets shows it as text instead of
+  running it as a formula. Importing a ResellFlow CSV removes that `'` again.
 - **Import CSV**: bulk-add inventory or sales. Click **Download template** next to each importer for
   the exact columns (with two example rows to overwrite). Imports are additive too.
 
@@ -274,7 +290,23 @@ Registration is invite-only, and each person's data is completely private to the
 1. Sign in as the admin and go to **Settings → Invites**.
 2. Optionally **Lock to email** so only that address can use the code.
 3. Click **Create invite**.
-4. Share the link `https://<your-host>/register?code=<CODE>`. They create their own account and
-   start with an empty inventory.
+4. Share the link `https://<your-host>/register?code=<CODE>`. They create their own account (password
+   at least 12 characters) and start with an empty inventory.
 
 Invite codes can be used once. Delete any you no longer need from the same list.
+
+---
+
+## 12. Privacy and security
+
+- **Your data stays on your server.** Nothing is sent to outside services unless you switch it on
+  in Settings: *Fetch today's rate automatically* and *Look up unknown barcodes online* are both off by
+  default. The app's own build telemetry (Next.js, Prisma) is turned off.
+- **Who can open it:** by default only the computer running ResellFlow. To use it from your phone or
+  another computer on the same network, whoever runs the server sets `APP_BIND=0.0.0.0` (see the
+  [README](../README.md#quick-start)). For use away from home, use Tailscale rather than opening a port
+  on your router: see [Hosting on a NAS](DEPLOY-NAS.md#6-https-for-the-phone-camera).
+- **Lost a phone, or signed in on someone else's computer?** **Settings → Account → Sign out of all
+  devices** ends every session for your account, this one included. Then sign in again.
+- **Sign-in protection:** 10 wrong passwords in a row pauses sign-in for that account for 15 minutes,
+  except on browsers you've already signed in with.

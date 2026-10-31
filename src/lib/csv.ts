@@ -49,6 +49,21 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
+// Spreadsheet apps (Excel, Sheets, Numbers) run any cell starting with one of these
+// as a formula — e.g. an item title like =HYPERLINK(...) that came from an import
+// or a barcode lookup. Exports prefix such text with ' so it shows as plain text.
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+/** Text safe to put in an exported CSV cell (numbers pass through untouched). */
+export function neutralizeFormula(v: string): string {
+  return FORMULA_START.test(v) ? `'${v}` : v;
+}
+
+/** Undo neutralizeFormula, so a ResellFlow export re-imports with its original text. */
+function restoreFormulaText(v: string): string {
+  return v.startsWith("'") && FORMULA_START.test(v.slice(1)) ? v.slice(1) : v;
+}
+
 /** Parse with the first row as headers → array of {header: value} objects. */
 export function parseCsvObjects(text: string): Record<string, string>[] {
   const rows = parseCsv(text);
@@ -56,7 +71,7 @@ export function parseCsvObjects(text: string): Record<string, string>[] {
   const headers = rows[0].map((h) => h.trim().toLowerCase());
   return rows.slice(1).map((r) => {
     const obj: Record<string, string> = {};
-    headers.forEach((h, idx) => (obj[h] = (r[idx] ?? "").trim()));
+    headers.forEach((h, idx) => (obj[h] = restoreFormulaText((r[idx] ?? "").trim())));
     return obj;
   });
 }

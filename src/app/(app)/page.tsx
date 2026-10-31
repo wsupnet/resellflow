@@ -24,7 +24,7 @@ export default async function DashboardPage() {
 
   // Time frame: remembered in a cookie so the dashboard opens on whatever
   // period was last viewed. Default = all time.
-  const rawPeriod = cookies().get("dashPeriod")?.value;
+  const rawPeriod = (await cookies()).get("dashPeriod")?.value;
   const period: Period = rawPeriod ? normalizePeriod(rawPeriod) : "all";
   const allTime = period === "all";
   const { start, end, label } = resolveRange(period);

@@ -10,6 +10,7 @@ Code and data live in separate places:
 | App data | `/volume1/docker/appdata/reselling-app/` | Outside the repo, so `git pull` never touches it. |
 | ├ `postgres/` | → `/var/lib/postgresql/data` in `db` | Postgres keeps its files in the `pgdata/` subfolder. |
 | ├ `uploads/` | → `/app/uploads` in `app` | Item photos (`<id>.jpg` + `<id>.thumb.jpg`). |
+| ├ `secrets/` | → `/app/secrets` in `app` | `auth_secret`, generated on first boot if `.env` has no `AUTH_SECRET`. Keep it private. |
 | └ `tailscale/` | → `/var/lib/tailscale` in `tailscale` | Only used with the `ts` profile (`COMPOSE_PROFILES=ts` on the NAS). |
 
 The data folders are **bind mounts**, set by `APPDATA` in `.env`
@@ -31,8 +32,10 @@ and no registry**. You only need a `.env` with your own secrets.
    cd reselling-app
    ```
 2. `cp .env.example .env` and set the REQUIRED values (`POSTGRES_PASSWORD`,
-   `DATABASE_URL` with that same password, `AUTH_SECRET`, `ADMIN_EMAIL`,
-   `ADMIN_PASSWORD`), **`APPDATA=/volume1/docker/appdata`** and
+   `DATABASE_URL` with that same password, `ADMIN_EMAIL`, `ADMIN_PASSWORD` — 12+
+   characters), **`APPDATA=/volume1/docker/appdata`**,
+   **`APP_BIND=0.0.0.0`** (so other devices can open `http://<NAS-IP>:3939`; the
+   default only answers on the NAS itself) and
    **`COMPOSE_PROFILES=ts`** (plus `TS_AUTHKEY`) — see section 2 below. Compose
    refuses to start until the required ones are set.
 3. Run:
@@ -120,9 +123,12 @@ Edit `.env` and set:
   `docker compose up` (needs `TS_AUTHKEY`; see "HTTPS via Tailscale container")
 - `POSTGRES_PASSWORD` — a strong password
 - `DATABASE_URL` — must contain that same password (e.g. `postgresql://resell:THEPASSWORD@db:5432/resellflow?schema=public`)
-- `AUTH_SECRET` — generate one: `openssl rand -base64 48`
+- `AUTH_SECRET` — optional; generated on first boot into
+  `$APPDATA/reselling-app/secrets/` if unset (or set your own: `openssl rand -base64 48`)
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` — your login
 - `APP_PORT` — a free port on the NAS (Synology uses 5000/5001; pick e.g. `3939`)
+- `APP_BIND=0.0.0.0` — publish that port on the LAN. Without it the app only answers
+  on the NAS itself (fine if you only use the Tailscale URL)
 - `SITE_ADDRESS` — your NAS IP or Tailscale name (only used if you run the Caddy HTTPS profile)
 
 ## 3. Build & start
@@ -158,9 +164,12 @@ from the volume's mountpoint, or a throwaway container mounting both). Copy the
 old volumes until the app is confirmed working on the new folders.
 
 ## 5. Open it
-Visit `http://<NAS-IP>:<APP_PORT>` on your LAN and log in. Everything (login,
-inventory, sales, ledger) works over plain HTTP — **except the camera scanner**,
-which needs HTTPS (next step).
+Visit `http://<NAS-IP>:<APP_PORT>` on your LAN and log in. This needs
+`APP_BIND=0.0.0.0` in `.env`; without it the app only answers on the NAS itself
+(the Tailscale options below still work). Everything (login, inventory, sales,
+ledger) works over plain HTTP — **except the camera scanner**, which needs HTTPS
+(next step). Plain HTTP sends your password unencrypted over the LAN, so prefer
+the HTTPS address once it's set up.
 
 ## 6. HTTPS for the phone camera
 Two good options:
@@ -176,10 +185,21 @@ Two good options:
 - Set `SITE_ADDRESS` in `.env` to the NAS IP, then:
   `docker compose --profile https up -d`
 - Visit `https://<NAS-IP>` (accept the one-time self-signed cert warning).
+- Caddy publishes ports 80 and 443 on **all** of the NAS's network interfaces,
+  whatever `APP_BIND` is set to.
+
+**Sign-in throttling per IP (optional):** if *every* visitor comes in through
+Tailscale or Caddy and `APP_BIND` is left at its default (so nobody can reach
+`<NAS-IP>:<APP_PORT>` directly), set `TRUST_PROXY=1` in `.env` to also limit
+failed sign-ins per client IP. Don't set it together with `APP_BIND=0.0.0.0`:
+a visitor reaching the app directly could fake their IP.
 
 If your NAS already runs a reverse proxy (Synology "Reverse Proxy", Nginx Proxy
 Manager, Traefik) with a domain + Let's Encrypt, you can instead point it at the
-app container / `APP_PORT` for a clean public hostname.
+app container / `APP_PORT` for a clean public hostname. A proxy running on the
+NAS itself reaches `127.0.0.1:<APP_PORT>` with the default `APP_BIND`; one in
+another container or machine needs `APP_BIND=0.0.0.0`. Exposing the app to the
+internet this way is possible but not recommended — Tailscale keeps it private.
 
 ## 7. Backups & persistence
 All data lives in plain folders under `/volume1/docker/appdata/reselling-app/`
@@ -205,14 +225,38 @@ folder — they're real business data.
   git pull
   sudo docker compose up -d --build
   ```
-  Data under `APPDATA` is untouched by both steps.
+  Data under `APPDATA` is untouched by both steps. If an update would delete data
+  from the database, the app refuses to start and says so in
+  `sudo docker compose logs app` — see "Updates that change the database" in the
+  [README](../README.md#updates-that-change-the-database).
+- **Updating from a version before the October 2026 security update:**
+  - Add `APP_BIND=0.0.0.0` to `.env` if you open the app by `http://<NAS-IP>:<APP_PORT>`.
+    The Tailscale URL works either way.
+  - Keep your existing `AUTH_SECRET` in `.env` (nobody gets signed out), or delete
+    the line to have one generated into `secrets/` (everyone signs in once more).
+    The app now refuses to start with the `.env.example` placeholder or a secret
+    shorter than 32 characters, and says so in the logs.
+  - **Settings → Today's rate** starts at ¥150 per $1 with automatic fetching off.
+    Set your own rate, or tick *Fetch today's rate automatically*.
+  - Account emails are now matched exactly, lowercased. The first boot lowercases
+    any stored email that has capitals (logged as "Normalized account email …").
+  - If the database password in `DATABASE_URL` is wrong, the app now stops with
+    that error in `sudo docker compose logs app` instead of "waiting for db..."
+    forever.
 
 ## 9. Passwords & lockout
 
 - **Change your password** in the app: **Settings → Account**. It needs your
   current password, and signs out every other device.
+- **Sign out of all devices** (Settings → Account) ends every session for that
+  account, including the current one — use it after losing a phone.
+- After **10 wrong passwords** for one account, sign-in for that account pauses
+  for 15 minutes (restarting the app also clears it). Browsers that have signed
+  in to that account before keep their own allowance, so you can still get in
+  from your usual devices while someone else is guessing.
 - `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env` are only used to create the admin
-  account on the **first** boot. Changing `ADMIN_PASSWORD` later does nothing to
+  account on the **first** boot, and that boot stops if the password is under 12
+  characters or an example value. Changing `ADMIN_PASSWORD` later does nothing to
   the existing account (and changing `ADMIN_EMAIL` would create a second admin).
 
 **Locked out?** Reset a password from the NAS over SSH, in the project folder:

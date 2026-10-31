@@ -55,7 +55,7 @@ function RegisterForm() {
           </div>
           <div>
             <label className="label">Password</label>
-            <input name="password" type="password" required minLength={8} className="input" autoComplete="new-password" />
+            <input name="password" type="password" required minLength={12} className="input" autoComplete="new-password" />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button className="btn-primary w-full" disabled={loading}>

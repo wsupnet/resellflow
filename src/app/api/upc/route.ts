@@ -33,7 +33,7 @@ async function nearBarcode(userId: string, code: string) {
  *  2. OpenLibrary — books/manga by ISBN (codes starting 978/979).
  *  3. MusicBrainz — music CDs/vinyl by barcode.
  *  4. UPCitemdb — generic retail products.
- * Sources 2–4 are external and only run when "UPC lookup" is enabled in Settings.
+ * Sources 2–4 are external and only run when "Look up unknown barcodes online" is on in Settings.
  * (There is no reliable free barcode API for loose game cartridges; those lean on
  * source 1 once you've named them once.)
  */
@@ -42,7 +42,8 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const code = new URL(req.url).searchParams.get("code")?.trim();
-  if (!code) return NextResponse.json({ title: null });
+  // Real barcodes are short; don't pass arbitrary text on to the lookup services.
+  if (!code || code.length > 64) return NextResponse.json({ title: null });
 
   // 1) Your own catalog — always available, no external call. Returns the master
   // name + category so a re-scan inherits them (condition/cost stay per-item).

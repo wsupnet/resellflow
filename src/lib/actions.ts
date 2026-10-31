@@ -5,17 +5,16 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import { mkdir, writeFile, unlink } from "fs/promises";
-import path from "path";
 import { prisma } from "./db";
-import { requireUser, createSession, hashPassword, verifyPassword } from "./auth";
+import { requireUser, createSession, destroySession, hashPassword, verifyPassword } from "./auth";
 import { passwordProblem } from "./password";
 import { normalizeKey, similarity } from "./normalize";
 import { setFlash } from "./flash";
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+import { likeLiteral, normalizeEmail } from "./email";
+import { UPLOAD_DIR, encodePhoto, isPhotoId, isStoredPhoto, photoPath, parsePhotoFileName } from "./uploads";
 
 export async function clearFlash() {
-  cookies().delete("flash");
+  (await cookies()).delete("flash");
 }
 
 // ─────────────── helpers ───────────────
@@ -78,7 +77,7 @@ async function ensureProduct(userId: string, title: string, category?: string | 
 async function resolveLocation(userId: string, raw: string): Promise<string | null> {
   const name = raw.trim();
   if (!name) return null;
-  const existing = await prisma.location.findFirst({ where: { userId, name: { equals: name, mode: "insensitive" } } });
+  const existing = await prisma.location.findFirst({ where: { userId, name: { equals: likeLiteral(name), mode: "insensitive" } } });
   if (existing) return existing.id;
   const created = await prisma.location.create({ data: { userId, name } });
   return created.id;
@@ -133,7 +132,7 @@ export async function createSinglePurchase(fd: FormData) {
 
   const sku = str(fd.get("sku"));
   if (sku) await applyItemSku(user.id, { id: purchase.items[0].id, productId: product.id, title }, sku);
-  setFlash(`Added “${title}”`);
+  await setFlash(`Added “${title}”`);
   revalidateAll();
 }
 
@@ -195,7 +194,7 @@ export async function createLotPurchase(fd: FormData) {
       }
     });
   }
-  setFlash(`Created lot “${title}” with ${rawItems.length} item${rawItems.length === 1 ? "" : "s"}`);
+  await setFlash(`Created lot “${title}” with ${rawItems.length} item${rawItems.length === 1 ? "" : "s"}`);
   revalidateAll();
 }
 
@@ -220,7 +219,7 @@ export async function addItemToLot(fd: FormData) {
       status: "UNLISTED"
     }
   });
-  setFlash(`Added “${title}” to the lot`);
+  await setFlash(`Added “${title}” to the lot`);
   revalidateAll();
 }
 
@@ -244,7 +243,7 @@ export async function renameProduct(fd: FormData) {
   const product = await prisma.product.findFirst({ where: { id, userId: user.id } });
   if (!product) throw new Error("Product not found");
   await cascadeProductName(user.id, id, name);
-  setFlash(`Renamed to “${name}”`);
+  await setFlash(`Renamed to “${name}”`);
   revalidateAll();
 }
 
@@ -483,7 +482,7 @@ export async function updateItem(fd: FormData) {
   if (fd.has("sku")) {
     await applyItemSku(user.id, { id: item.id, productId: item.productId, title: title || item.title }, str(fd.get("sku")));
   }
-  setFlash("Item updated");
+  await setFlash("Item updated");
   revalidateAll();
 }
 
@@ -540,7 +539,7 @@ export async function bulkUpdateItems(fd: FormData) {
   }
 
   if (count === 0) return;
-  setFlash(`Updated ${count} item${count === 1 ? "" : "s"}`);
+  await setFlash(`Updated ${count} item${count === 1 ? "" : "s"}`);
   revalidateAll();
 }
 
@@ -579,7 +578,7 @@ export async function mergeProducts(fd: FormData) {
     await tx.item.updateMany({ where: { productId: keep.id, userId: user.id }, data: { title: name } });
   }, { timeout: 30000, maxWait: 10000 });
 
-  setFlash(`Merged ${products.length} products into “${name}”`);
+  await setFlash(`Merged ${products.length} products into “${name}”`);
   revalidateAll();
 }
 
@@ -594,7 +593,7 @@ export async function linkItemToProduct(fd: FormData) {
   const oldId = item.productId;
   await prisma.item.update({ where: { id: itemId }, data: { productId } });
   if (oldId && oldId !== productId) await cleanupProductIfEmpty(oldId);
-  setFlash(`Linked to “${product.name}”`);
+  await setFlash(`Linked to “${product.name}”`);
   revalidateAll();
 }
 
@@ -602,7 +601,7 @@ export async function deleteItem(fd: FormData) {
   const user = await requireUser();
   const id = str(fd.get("id"));
   await prisma.item.deleteMany({ where: { id, userId: user.id } });
-  setFlash("Item deleted");
+  await setFlash("Item deleted");
   revalidateAll();
 }
 
@@ -633,7 +632,7 @@ export async function updateLot(fd: FormData) {
   if (fd.has("location")) data.locationId = await resolveLocation(user.id, str(fd.get("location")));
 
   await prisma.purchase.update({ where: { id }, data });
-  setFlash("Lot updated");
+  await setFlash("Lot updated");
   revalidateAll();
 }
 
@@ -641,7 +640,7 @@ export async function deletePurchase(fd: FormData) {
   const user = await requireUser();
   const id = str(fd.get("id"));
   await prisma.purchase.deleteMany({ where: { id, userId: user.id } });
-  setFlash("Purchase deleted");
+  await setFlash("Purchase deleted");
   revalidateAll();
   // The lot detail page would 404 after its record is gone, so send the user back.
   redirect("/lots");
@@ -703,7 +702,7 @@ export async function recordSale(fd: FormData) {
       data: { status: "SOLD" }
     })
   ]);
-  setFlash(`Sale recorded · ${itemIds.length} item${itemIds.length === 1 ? "" : "s"}`);
+  await setFlash(`Sale recorded · ${itemIds.length} item${itemIds.length === 1 ? "" : "s"}`);
   revalidateAll();
 }
 
@@ -756,7 +755,7 @@ export async function updateSale(fd: FormData) {
     if (p != null && p !== l.salePrice) await prisma.saleItem.update({ where: { id: l.id }, data: { salePrice: p, priceJpy: null } });
   }
 
-  setFlash("Sale updated");
+  await setFlash("Sale updated");
   revalidateAll();
 }
 
@@ -770,7 +769,7 @@ export async function deleteSale(fd: FormData) {
     prisma.sale.delete({ where: { id } }),
     prisma.item.updateMany({ where: { id: { in: itemIds }, userId: user.id }, data: { status: "UNLISTED" } })
   ]);
-  setFlash("Sale removed · items back in stock");
+  await setFlash("Sale removed · items back in stock");
   revalidateAll();
 }
 
@@ -785,7 +784,7 @@ export async function setProductComp(fd: FormData) {
     where: { id },
     data: { compPrice: num(fd.get("compPrice")), compNotes: str(fd.get("compNotes")) || null }
   });
-  setFlash("Comp saved");
+  await setFlash("Comp saved");
   revalidateAll();
 }
 
@@ -825,7 +824,7 @@ export async function createExpense(fd: FormData) {
       ...attach
     }
   });
-  setFlash("Expense added");
+  await setFlash("Expense added");
   revalidateAll();
   revalidatePath("/ledger");
 }
@@ -847,7 +846,7 @@ export async function updateExpense(fd: FormData) {
       ...attach
     }
   });
-  setFlash("Expense updated");
+  await setFlash("Expense updated");
   revalidateAll();
   revalidatePath("/ledger");
 }
@@ -856,7 +855,7 @@ export async function deleteExpense(fd: FormData) {
   const user = await requireUser();
   const id = str(fd.get("id"));
   await prisma.expense.deleteMany({ where: { id, userId: user.id } });
-  setFlash("Expense deleted");
+  await setFlash("Expense deleted");
   revalidateAll();
   revalidatePath("/ledger");
 }
@@ -866,16 +865,15 @@ export async function deleteExpense(fd: FormData) {
 /** Downscale + thumbnail a single image with sharp and write it to the uploads
  *  volume, recording one Photo row. Shared by uploadPhotos and the lot builder. */
 async function storeItemPhoto(userId: string, itemId: string, f: File) {
-  const { default: sharp } = await import("sharp");
   await mkdir(UPLOAD_DIR, { recursive: true });
   const order = await prisma.photo.count({ where: { itemId } });
   const photo = await prisma.photo.create({ data: { userId, itemId, order } });
   try {
     const buf = Buffer.from(await f.arrayBuffer());
-    const full = await sharp(buf).rotate().resize(1600, 1600, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
-    const thumb = await sharp(buf).rotate().resize(400, 400, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 75 }).toBuffer();
-    await writeFile(path.join(UPLOAD_DIR, `${photo.id}.jpg`), full);
-    await writeFile(path.join(UPLOAD_DIR, `${photo.id}.thumb.jpg`), thumb);
+    const full = await encodePhoto(buf, false);
+    const thumb = await encodePhoto(buf, true);
+    await writeFile(photoPath(photo.id)!, full);
+    await writeFile(photoPath(photo.id, true)!, thumb);
     return true;
   } catch {
     await prisma.photo.delete({ where: { id: photo.id } }).catch(() => {});
@@ -894,7 +892,6 @@ export async function uploadPhotos(fd: FormData) {
   const files = fd.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return;
 
-  const { default: sharp } = await import("sharp");
   await mkdir(UPLOAD_DIR, { recursive: true });
   let order = await prisma.photo.count({ where: { itemId } });
   let added = 0;
@@ -903,16 +900,16 @@ export async function uploadPhotos(fd: FormData) {
     const buf = Buffer.from(await f.arrayBuffer());
     const photo = await prisma.photo.create({ data: { userId: user.id, itemId, order: order++ } });
     try {
-      const full = await sharp(buf).rotate().resize(1600, 1600, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
-      const thumb = await sharp(buf).rotate().resize(400, 400, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 75 }).toBuffer();
-      await writeFile(path.join(UPLOAD_DIR, `${photo.id}.jpg`), full);
-      await writeFile(path.join(UPLOAD_DIR, `${photo.id}.thumb.jpg`), thumb);
+      const full = await encodePhoto(buf, false);
+      const thumb = await encodePhoto(buf, true);
+      await writeFile(photoPath(photo.id)!, full);
+      await writeFile(photoPath(photo.id, true)!, thumb);
       added++;
     } catch {
       await prisma.photo.delete({ where: { id: photo.id } }).catch(() => {});
     }
   }
-  setFlash(added > 0 ? `Added ${added} photo${added === 1 ? "" : "s"}` : "Couldn't read those images");
+  await setFlash(added > 0 ? `Added ${added} photo${added === 1 ? "" : "s"}` : "Couldn't read those images");
   revalidateAll();
 }
 
@@ -922,9 +919,11 @@ export async function deletePhoto(fd: FormData) {
   const photo = await prisma.photo.findFirst({ where: { id, userId: user.id } });
   if (!photo) return;
   await prisma.photo.delete({ where: { id } });
-  await unlink(path.join(UPLOAD_DIR, `${id}.jpg`)).catch(() => {});
-  await unlink(path.join(UPLOAD_DIR, `${id}.thumb.jpg`)).catch(() => {});
-  setFlash("Photo deleted");
+  for (const thumb of [false, true]) {
+    const fp = photoPath(id, thumb);
+    if (fp) await unlink(fp).catch(() => {});
+  }
+  await setFlash("Photo deleted");
   revalidateAll();
 }
 
@@ -1135,7 +1134,8 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
       }
 
       // 7) Photos — metadata only; files re-link if still on the uploads volume.
-      const photos = (d.photos ?? []).filter((ph: any) => itemIds.has(ph.itemId));
+      // Ids become file names, so only well-formed ids are accepted.
+      const photos = (d.photos ?? []).filter((ph: any) => isPhotoId(ph.id) && itemIds.has(ph.itemId));
       if (photos.length) {
         const r = await tx.photo.createMany({
           data: photos.map((ph: any) => ({ id: ph.id, userId: uid, itemId: ph.itemId, order: ph.order ?? 0, createdAt: D(ph.createdAt) })),
@@ -1149,7 +1149,7 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
         const s = d.settings;
         await tx.settings.upsert({
           where: { userId: uid },
-          create: { userId: uid, ebayFeePct: s.ebayFeePct, ebayFlatFee: s.ebayFlatFee, mercariFeePct: s.mercariFeePct, adFeePct: s.adFeePct, defaultShipping: s.defaultShipping, upcLookup: !!s.upcLookup, homeCurrency: s.homeCurrency ?? "USD", fxMode: s.fxMode ?? "live", theme: s.theme ?? "light" },
+          create: { userId: uid, ebayFeePct: s.ebayFeePct, ebayFlatFee: s.ebayFlatFee, mercariFeePct: s.mercariFeePct, adFeePct: s.adFeePct, defaultShipping: s.defaultShipping, upcLookup: !!s.upcLookup, homeCurrency: s.homeCurrency === "JPY" ? "JPY" : "USD", fxMode: s.fxMode === "historical" ? "historical" : "live", fxLive: !!s.fxLive, fxManualRate: typeof s.fxManualRate === "number" && s.fxManualRate > 0 ? s.fxManualRate : 150, theme: ["light", "cream", "dark", "system"].includes(s.theme) ? s.theme : "light" },
           update: {}
         });
       }
@@ -1159,6 +1159,12 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
 
   return counts;
 }
+
+// Restore limits: generous for real backups (photos are stored downscaled, ~0.5MB
+// each), small enough that a crafted zip can't exhaust the server's memory.
+const MAX_ZIP_ENTRIES = 20000;
+const MAX_ZIP_ENTRY = 50 * 1024 * 1024;
+const MAX_ZIP_TOTAL = 1024 * 1024 * 1024;
 
 /**
  * Restore from a backup file — either the JSON export (data only) or the .zip
@@ -1170,15 +1176,24 @@ export async function restoreBackup(fd: FormData): Promise<{ error?: string; cou
   if (!file || file.size === 0) return { error: "No backup file selected" };
 
   let data: any;
-  let photoFiles: { name: string; buf: Buffer }[] = [];
+  // Photo files found in the zip, not yet decompressed (see the write loop below).
+  let photoEntries: { id: string; thumb: boolean; entry: import("adm-zip").IZipEntry }[] = [];
 
   if (file.name.toLowerCase().endsWith(".zip")) {
     const { default: AdmZip } = await import("adm-zip");
     let zip: InstanceType<typeof AdmZip>;
+    let entries: import("adm-zip").IZipEntry[];
     try {
       zip = new AdmZip(Buffer.from(await file.arrayBuffer()));
+      entries = zip.getEntries();
     } catch {
       return { error: "Couldn't read that .zip file" };
+    }
+    // Zip-bomb guard: check declared sizes before decompressing anything (adm-zip
+    // refuses to inflate an entry past its declared size).
+    const declared = entries.reduce((a, e) => a + e.header.size, 0);
+    if (entries.length > MAX_ZIP_ENTRIES || declared > MAX_ZIP_TOTAL || entries.some((e) => e.header.size > MAX_ZIP_ENTRY)) {
+      return { error: "That .zip is too large to restore" };
     }
     const entry = zip.getEntry("backup.json");
     if (!entry) return { error: "Zip has no backup.json — not a ResellFlow backup" };
@@ -1189,9 +1204,12 @@ export async function restoreBackup(fd: FormData): Promise<{ error?: string; cou
     } catch {
       return { error: "backup.json inside the zip isn't valid" };
     }
-    for (const e of zip.getEntries()) {
-      if (e.isDirectory || e.entryName === "backup.json") continue;
-      photoFiles.push({ name: path.basename(e.entryName), buf: e.getData() });
+    // Only "<photoId>.jpg" / "<photoId>.thumb.jpg" at the zip root are photo files;
+    // everything else (other names, folders, "../" tricks) is ignored.
+    for (const e of entries) {
+      if (e.isDirectory) continue;
+      const parsedName = parsePhotoFileName(e.entryName);
+      if (parsedName) photoEntries.push({ ...parsedName, entry: e });
     }
   } else {
     let backup: any;
@@ -1206,16 +1224,31 @@ export async function restoreBackup(fd: FormData): Promise<{ error?: string; cou
 
   const counts = await applyRestore(user.id, data);
 
-  // Restore photo image files from the zip onto the uploads volume.
-  if (photoFiles.length) {
+  // Restore photo image files from the zip onto the uploads volume — only for
+  // photo records this user owns (a backup can't overwrite someone else's photo),
+  // at most one full image + one thumbnail per photo (duplicate entries ignored),
+  // and only files that are already this app's stored format (JPEG ≤1600px,
+  // checked from the header without decoding), so a crafted zip can't make the
+  // server decode thousands of images.
+  if (photoEntries.length) {
+    const owned = new Set(
+      (await prisma.photo.findMany({ where: { userId: user.id, id: { in: photoEntries.map((p) => p.id) } }, select: { id: true } })).map((p) => p.id)
+    );
+    const seen = new Set<string>();
     await mkdir(UPLOAD_DIR, { recursive: true });
     let written = 0;
-    for (const p of photoFiles) {
+    for (const p of photoEntries) {
+      const slot = `${p.id}${p.thumb ? ".thumb" : ""}`;
+      const dest = owned.has(p.id) && !seen.has(slot) ? photoPath(p.id, p.thumb) : null;
+      if (!dest) continue;
+      seen.add(slot);
       try {
-        await writeFile(path.join(UPLOAD_DIR, p.name), p.buf);
+        const data = p.entry.getData();
+        if (!(await isStoredPhoto(data))) continue;
+        await writeFile(dest, data);
         written++;
       } catch {
-        /* skip unwritable */
+        /* skip unreadable / unwritable */
       }
     }
     counts.photoFiles = written;
@@ -1223,7 +1256,7 @@ export async function restoreBackup(fd: FormData): Promise<{ error?: string; cou
 
   revalidateAll();
   revalidatePath("/ledger");
-  setFlash(`Restore complete · ${Object.values(counts).reduce((a, b) => a + b, 0)} records added`);
+  await setFlash(`Restore complete · ${Object.values(counts).reduce((a, b) => a + b, 0)} records added`);
   return { counts };
 }
 
@@ -1233,12 +1266,12 @@ export async function createLocation(fd: FormData) {
   const user = await requireUser();
   const name = str(fd.get("name"));
   if (!name) return;
-  const existing = await prisma.location.findFirst({ where: { userId: user.id, name: { equals: name, mode: "insensitive" } } });
+  const existing = await prisma.location.findFirst({ where: { userId: user.id, name: { equals: likeLiteral(name), mode: "insensitive" } } });
   if (existing) {
-    setFlash(`“${name}” already exists`);
+    await setFlash(`“${name}” already exists`);
   } else {
     await prisma.location.create({ data: { userId: user.id, name, kind: str(fd.get("kind")) || null, notes: str(fd.get("notes")) || null } });
-    setFlash(`Added location “${name}”`);
+    await setFlash(`Added location “${name}”`);
   }
   revalidateAll();
   revalidatePath("/locations");
@@ -1250,7 +1283,7 @@ export async function renameLocation(fd: FormData) {
   const name = str(fd.get("name"));
   if (!name) return;
   await prisma.location.updateMany({ where: { id, userId: user.id }, data: { name, kind: str(fd.get("kind")) || null } });
-  setFlash("Location updated");
+  await setFlash("Location updated");
   revalidateAll();
   revalidatePath("/locations");
 }
@@ -1260,7 +1293,7 @@ export async function deleteLocation(fd: FormData) {
   const user = await requireUser();
   const id = str(fd.get("id"));
   await prisma.location.deleteMany({ where: { id, userId: user.id } });
-  setFlash("Location deleted");
+  await setFlash("Location deleted");
   revalidateAll();
   revalidatePath("/locations");
 }
@@ -1276,9 +1309,12 @@ export async function updateSettings(fd: FormData) {
   const upcLookup = fd.get("upcLookup") != null;
   const homeCurrency = str(fd.get("homeCurrency")) === "JPY" ? "JPY" : "USD";
   const fxMode = str(fd.get("fxMode")) === "historical" ? "historical" : "live";
+  const fxLive = fd.get("fxLive") != null;
+  const manualRate = num(fd.get("fxManualRate"));
+  const fxManualRate = manualRate != null && manualRate > 0 && manualRate < 10000 ? manualRate : undefined;
   const theme = ["light", "cream", "dark", "system"].includes(str(fd.get("theme"))) ? str(fd.get("theme")) : "light";
   // The root layout renders the theme from this cookie (no flash of wrong theme).
-  cookies().set("theme", theme, { path: "/", maxAge: 31536000, sameSite: "lax" });
+  (await cookies()).set("theme", theme, { path: "/", maxAge: 31536000, sameSite: "lax" });
   await prisma.settings.upsert({
     where: { userId: user.id },
     update: {
@@ -1290,6 +1326,8 @@ export async function updateSettings(fd: FormData) {
       upcLookup,
       homeCurrency,
       fxMode,
+      fxLive,
+      fxManualRate,
       theme
     },
     create: {
@@ -1302,10 +1340,12 @@ export async function updateSettings(fd: FormData) {
       upcLookup,
       homeCurrency,
       fxMode,
+      fxLive,
+      fxManualRate,
       theme
     }
   });
-  setFlash("Settings saved");
+  await setFlash("Settings saved");
   revalidatePath("/settings");
 }
 
@@ -1336,14 +1376,24 @@ export async function changePassword(fd: FormData): Promise<{ error?: string }> 
   return {};
 }
 
+/** Sign out of every device, this one included — e.g. after a lost phone or a
+ *  shared computer. Bumping sessionVersion invalidates every cookie issued so far,
+ *  even a copied one that hasn't expired yet. */
+export async function signOutEverywhere() {
+  const user = await requireUser();
+  await prisma.user.update({ where: { id: user.id }, data: { sessionVersion: { increment: 1 } } });
+  await destroySession();
+  redirect("/login");
+}
+
 export async function createInvite(fd: FormData) {
   const user = await requireUser();
   if (!user.isAdmin) throw new Error("Only admins can create invites");
   const code = randomBytes(6).toString("hex");
   await prisma.invite.create({
-    data: { code, email: str(fd.get("email")).toLowerCase() || null, createdBy: user.id }
+    data: { code, email: normalizeEmail(str(fd.get("email"))) || null, createdBy: user.id }
   });
-  setFlash("Invite created");
+  await setFlash("Invite created");
   revalidatePath("/settings");
 }
 

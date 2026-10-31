@@ -10,7 +10,7 @@ import ThemeSync from "@/components/ThemeSync";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const flash = readFlash();
+  const flash = await readFlash();
   const currency = await getViewCurrency(user.id);
   const settings = await prisma.settings.findUnique({ where: { userId: user.id }, select: { theme: true } });
 

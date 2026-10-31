@@ -95,7 +95,7 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
       {/* Converter */}
       <div className="card">
         <h2 className="mb-3 text-lg font-semibold">Currency converter</h2>
-        <p className="mb-3 text-xs text-slate-400">Live rate ≈ ¥{rate.toFixed(1)} / $1</p>
+        <p className="mb-3 text-xs text-slate-400">Today&apos;s rate ≈ ¥{rate.toFixed(1)} / $1 (set in Settings)</p>
         <div className="flex items-end gap-2">
           <div className="grow">
             <label className="label">{dir === "jpy2usd" ? "Amount in yen" : "Amount in USD"}</label>

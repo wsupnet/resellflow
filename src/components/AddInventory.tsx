@@ -74,7 +74,7 @@ function YenUsd({ rate }: { rate: number }) {
       </div>
       <input type="hidden" name="fxRate" value={(1 / rate).toFixed(8)} />
       <p className="col-span-2 -mt-1 text-xs text-slate-400">
-        Live rate ≈ ¥{rate.toFixed(1)} / $1. Edit the USD field if you paid a different effective rate.
+        Today&apos;s rate ≈ ¥{rate.toFixed(1)} / $1 (set in Settings). Edit the USD field if you paid a different effective rate.
       </p>
     </div>
   );
@@ -131,7 +131,7 @@ export default function AddInventory({ rate, locations = [], defaultCurrency = "
         if (!title) setTitle(d.title);
         setLookupMsg(`Found via ${d.source ?? "lookup"}: ${d.title}`);
       } else if (d.enabled === false) {
-        setLookupMsg("Code saved. (Enable UPC lookup in Settings to auto-name new retail items.)");
+        setLookupMsg("Code saved. (Turn on “Look up unknown barcodes online” in Settings to auto-name new retail items.)");
       } else {
         setLookupMsg("No name found for this code — type it in.");
       }

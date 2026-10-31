@@ -10,11 +10,12 @@ import { getMoney, fmtMoney, type MoneyCtx } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReportsPage({
-  searchParams
-}: {
-  searchParams: { period?: string; from?: string; to?: string };
-}) {
+export default async function ReportsPage(
+  props: {
+    searchParams: Promise<{ period?: string; from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   const period = normalizePeriod(searchParams.period);
   const { start, end, label } = resolveRange(period, searchParams.from, searchParams.to);

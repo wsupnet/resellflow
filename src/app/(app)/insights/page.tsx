@@ -31,7 +31,10 @@ function sortStats(stats: VariantStat[], key: SortKey): VariantStat[] {
   return c.sort((a, b) => b.score - a.score);
 }
 
-export default async function InsightsPage({ searchParams }: { searchParams: { sort?: string; page?: string; per?: string } }) {
+export default async function InsightsPage(
+  props: { searchParams: Promise<{ sort?: string; page?: string; per?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   const [all, m] = await Promise.all([getVariantStats(user.id), getMoney(user.id)]);
   // Insights is about what sells — only variants with at least one sale.
@@ -63,7 +66,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: { s
     : { symbol: u.symbol, suffix: "", decimals: u.decimals };
 
   // The chart always ranks the full set; only the table paginates.
-  const per = resolvePer(searchParams.per, cookies().get("pageSize")?.value);
+  const per = resolvePer(searchParams.per, (await cookies()).get("pageSize")?.value);
   const pg = paginate(sorted, searchParams.page, per);
 
   return (

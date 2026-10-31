@@ -139,11 +139,13 @@ sales add up to it, so there are no mystery totals.
 ### ⚙️ Settings
 
 - **Fees**: eBay, Mercari, ad and default shipping rates (past sales keep the rates they were recorded with)
-- **Display**: USD or yen, live or historical exchange rate, light/dark/off-white theme
+- **Display**: USD or yen, today's or historical exchange rate (your own rate, or fetched automatically if
+  you opt in), light/dark/off-white theme
+- **Privacy**: outside services (exchange rate, online barcode lookup) are off until you switch them on
 - **Export & import**: CSV export of inventory, sales, lots and expenses; CSV import; full
   backup and restore (including photos)
 - **Invites** (admin): registration is invite-only
-- **Account**: change your password
+- **Account**: change your password, or sign out of all devices
 
 ---
 
@@ -156,6 +158,7 @@ sales add up to it, so there are no mystery totals.
 | 💴 **Dollars and yen** | Built for buying in Japan: store the yen price and the exchange rate you actually paid |
 | 📷 **Barcode scanning** | Scan with your phone camera to add items or check deals; optional name lookup from book, music and retail databases |
 | 📱 **Works on your phone** | Installable as a phone app (PWA) for use while sourcing |
+| 🔒 **Private by default** | Nothing is sent to outside services unless you turn it on; runs on your own machine |
 
 ![Mobile dashboard](screenshots/mobile-dashboard.png)
 
@@ -165,8 +168,9 @@ sales add up to it, so there are no mystery totals.
 
 - **For** solo resellers, and family or friends who resell. Each person gets their own private
   account, and nobody can see anyone else's data.
-- **Self-hosted.** It runs on your own computer or home NAS with one `docker compose` command.
-  No subscription, and your data stays with you.
+- **Self-hosted.** It runs on your own computer or home NAS with one `docker compose` command, on
+  Mac, Windows or Linux. No subscription, no telemetry, and your data stays with you — see
+  [Security & privacy](../README.md#security--privacy).
 - **Built with** Next.js, PostgreSQL, Prisma, Tailwind and Recharts.
 
 See the [User guide](USER-GUIDE.md) for step-by-step instructions, the [README](../README.md) for

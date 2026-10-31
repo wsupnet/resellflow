@@ -17,7 +17,8 @@ const METRICS: { key: Metric; label: string }[] = [
   { key: "net", label: "Net profit" }
 ];
 
-export default async function TrendsPage({ searchParams }: { searchParams: { metric?: string } }) {
+export default async function TrendsPage(props: { searchParams: Promise<{ metric?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   const [data, m] = await Promise.all([getSeasonality(user.id), getMoney(user.id)]);
 

@@ -9,7 +9,8 @@ import { getMoney, fmtMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-export default async function ItemDetailPage({ params }: { params: { id: string } }) {
+export default async function ItemDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await requireUser();
   const detail = await getItemDetail(user.id, params.id);
   if (!detail) notFound();
