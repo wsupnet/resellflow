@@ -168,6 +168,7 @@ export default async function InventoryPage({
       if (!ageThreshold) return true;
       // Aging is only meaningful for stock still sitting unsold.
       if (i.status !== "UNLISTED" && i.status !== "LISTED") return false;
+      if (p.purchasedAtApprox) return false; // best-guess date: age unknown
       return daysUnsold(p.purchasedAt) >= ageThreshold;
     })
     .filter(({ i }) => {
@@ -202,7 +203,7 @@ export default async function InventoryPage({
         timesSold: i.productId ? soldByVariant.get(variantKey(i.productId, i.product?.category, i.condition)) ?? 0 : 0,
         addedAt: i.createdAt.toISOString(),
         // Days sitting unsold, from the purchase date — only meaningful in stock.
-        daysInStock: i.status === "UNLISTED" || i.status === "LISTED" ? daysUnsold(p.purchasedAt) : null,
+        daysInStock: (i.status === "UNLISTED" || i.status === "LISTED") && !p.purchasedAtApprox ? daysUnsold(p.purchasedAt) : null,
         sku: i.product?.sku ?? null,
         category: i.product?.category ?? null,
         condition: i.condition,

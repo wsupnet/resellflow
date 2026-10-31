@@ -94,6 +94,9 @@ model Purchase {
   // tracked as a separate bucket and excluded from flip ROI (cost basis is $0).
   isPersonal Boolean    @default(false)
   purchasedAt DateTime   @default(now())
+  // Best-guess date (you forgot to log it when bought). Still sorts/displays,
+  // shown as "~date", but left out of days-to-sell and aging stats.
+  purchasedAtApprox Boolean @default(false)
 
   // Amount actually paid. Both currencies optional; USD is canonical for P&L.
   costUsd   Float        @default(0)

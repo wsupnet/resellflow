@@ -48,6 +48,7 @@ export default function LotBuilder({ rate, locations = [], defaultCurrency = "JP
   // setup
   const [source, setSource] = useState(SOURCES[0]);
   const [purchasedAt, setPurchasedAt] = useState("");
+  const [dateApprox, setDateApprox] = useState(false);
   const [costJpy, setCostJpy] = useState("");
   const [costUsd, setCostUsd] = useState("");
   const [usdEdited, setUsdEdited] = useState(false);
@@ -169,6 +170,7 @@ export default function LotBuilder({ rate, locations = [], defaultCurrency = "JP
       const fd = new FormData();
       fd.set("source", source);
       if (purchasedAt) fd.set("purchasedAt", purchasedAt);
+      if (dateApprox) fd.set("purchasedAtApprox", "on");
       if (lotName) fd.set("title", lotName);
       if (!personal && location) fd.set("location", location);
       if (personal) fd.set("isPersonal", "on");
@@ -314,6 +316,9 @@ export default function LotBuilder({ rate, locations = [], defaultCurrency = "JP
             <div>
               <label className="label">Purchased</label>
               <input type="date" value={purchasedAt} onChange={(e) => setPurchasedAt(e.target.value)} className="input" />
+              <label className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                <input type="checkbox" checked={dateApprox} onChange={(e) => setDateApprox(e.target.checked)} /> Approximate (best guess)
+              </label>
             </div>
           </div>
           {!personal && (

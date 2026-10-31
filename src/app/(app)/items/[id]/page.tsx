@@ -14,7 +14,7 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
   const detail = await getItemDetail(user.id, params.id);
   if (!detail) notFound();
 
-  const { item, lot, fin, sale, fees, expenses, daysToSell, daysInStock, variantSold, variantAvgDaysToSell, tracksCond } = detail;
+  const { item, lot, fin, sale, fees, expenses, daysToSell, daysInStock, dateApprox, variantSold, variantAvgDaysToSell, tracksCond } = detail;
   const m = await getMoney(user.id);
   // Historical mode: this item's figures at locked rates.
   const iy = m.currency === "JPY" && m.mode === "historical" ? buildYen(await getFinancials(user.id), m.rate).itemFinYen.get(params.id) : null;
@@ -50,9 +50,9 @@ export default async function ItemDetailPage({ params }: { params: { id: string 
         <StatCard label="ROI" value={item.status === "SOLD" && fin?.roi != null ? `${(fin.roi * 100).toFixed(1)}%` : "—"} tone={(fin?.roi ?? 0) >= 0 ? "good" : "bad"} />
         <StatCard label="Allocated cost" value={fmtMoney(cost, m, iy?.allocatedCost)} sub={item.costOverrideUsd != null ? "manual override" : lot.kind === "LOT" ? "share of lot" : undefined} />
         {daysToSell != null ? (
-          <StatCard label="Days to sell" value={`${daysToSell}d`} sub="purchase → sold" />
+          <StatCard label="Days to sell" value={`${dateApprox ? "~" : ""}${daysToSell}d`} sub={dateApprox ? "approx. purchase date" : "purchase → sold"} />
         ) : daysInStock != null ? (
-          <StatCard label="In stock" value={`${daysInStock}d`} sub="since purchase" />
+          <StatCard label="In stock" value={`${dateApprox ? "~" : ""}${daysInStock}d`} sub={dateApprox ? "approx. purchase date" : "since purchase"} />
         ) : null}
       </div>
 

@@ -110,6 +110,7 @@ export async function createSinglePurchase(fd: FormData) {
       locationId,
       isPersonal,
       purchasedAt: str(fd.get("purchasedAt")) ? new Date(str(fd.get("purchasedAt"))) : new Date(),
+      purchasedAtApprox: fd.get("purchasedAtApprox") != null,
       costUsd: isPersonal ? 0 : num(fd.get("costUsd")) ?? 0,
       costJpy: isPersonal ? null : num(fd.get("costJpy")),
       taxUsd: isPersonal ? 0 : num(fd.get("taxUsd")) ?? 0,
@@ -171,6 +172,7 @@ export async function createLotPurchase(fd: FormData) {
       locationId,
       isPersonal,
       purchasedAt,
+      purchasedAtApprox: fd.get("purchasedAtApprox") != null,
       costUsd: isPersonal ? 0 : num(fd.get("costUsd")) ?? 0,
       costJpy: isPersonal ? null : num(fd.get("costJpy")),
       taxUsd: isPersonal ? 0 : num(fd.get("taxUsd")) ?? 0,
@@ -274,6 +276,7 @@ export async function createLotDraft(fd: FormData): Promise<{ id: string; title:
       locationId,
       isPersonal,
       purchasedAt,
+      purchasedAtApprox: fd.get("purchasedAtApprox") != null,
       costUsd: isPersonal ? 0 : num(fd.get("costUsd")) ?? 0,
       costJpy: isPersonal ? null : num(fd.get("costJpy")),
       taxUsd: isPersonal ? 0 : num(fd.get("taxUsd")) ?? 0,
@@ -621,6 +624,7 @@ export async function updateLot(fd: FormData) {
   const source = str(fd.get("source"));
   if (source) data.source = source;
   if (str(fd.get("purchasedAt"))) data.purchasedAt = new Date(str(fd.get("purchasedAt")));
+  data.purchasedAtApprox = fd.get("purchasedAtApprox") != null;
   if (fd.has("costUsd")) data.costUsd = num(fd.get("costUsd")) ?? 0;
   if (fd.has("costJpy")) data.costJpy = num(fd.get("costJpy"));
   if (fd.has("taxUsd")) data.taxUsd = num(fd.get("taxUsd")) ?? 0;
@@ -974,6 +978,7 @@ export async function importInventoryCsv(fd: FormData): Promise<ImportResult> {
         isPersonal,
         locationId,
         purchasedAt: o.purchasedat || o.addedat || o.date ? new Date(o.purchasedat || o.addedat || o.date) : new Date(),
+        purchasedAtApprox: /^(y|yes|true|1|approx)/i.test(o.dateapprox || ""),
         costUsd: isPersonal ? 0 : num(o.costusd) ?? 0,
         costJpy: isPersonal ? null : num(o.costjpy),
         notes: o.notes || null,
@@ -1082,7 +1087,7 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
       // 2) Purchases
       if (Array.isArray(d.purchases) && d.purchases.length) {
         const r = await tx.purchase.createMany({
-          data: d.purchases.map((p: any) => ({ id: p.id, userId: uid, kind: p.kind, title: p.title, source: p.source, locationId: p.locationId && locationIds.has(p.locationId) ? p.locationId : null, isPersonal: !!p.isPersonal, purchasedAt: D(p.purchasedAt), costUsd: p.costUsd ?? 0, costJpy: p.costJpy ?? null, taxUsd: p.taxUsd ?? 0, taxJpy: p.taxJpy ?? null, fxRate: p.fxRate ?? null, notes: p.notes ?? null })),
+          data: d.purchases.map((p: any) => ({ id: p.id, userId: uid, kind: p.kind, title: p.title, source: p.source, locationId: p.locationId && locationIds.has(p.locationId) ? p.locationId : null, isPersonal: !!p.isPersonal, purchasedAt: D(p.purchasedAt), purchasedAtApprox: !!p.purchasedAtApprox, costUsd: p.costUsd ?? 0, costJpy: p.costJpy ?? null, taxUsd: p.taxUsd ?? 0, taxJpy: p.taxJpy ?? null, fxRate: p.fxRate ?? null, notes: p.notes ?? null })),
           skipDuplicates: true
         });
         counts.purchases = r.count;

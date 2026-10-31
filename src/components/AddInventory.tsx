@@ -215,6 +215,9 @@ export default function AddInventory({ rate, locations = [], defaultCurrency = "
             <div>
               <label className="label">Purchased</label>
               <input name="purchasedAt" type="date" className="input" />
+              <label className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                <input type="checkbox" name="purchasedAtApprox" /> Approximate (best guess)
+              </label>
             </div>
           </div>
           {!personal && <LocationField locations={locations} />}
@@ -266,6 +269,9 @@ export default function AddInventory({ rate, locations = [], defaultCurrency = "
             <div>
               <label className="label">Purchased</label>
               <input name="purchasedAt" type="date" className="input" />
+              <label className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                <input type="checkbox" name="purchasedAtApprox" /> Approximate (best guess)
+              </label>
             </div>
           </div>
           {tracksCondition(lotCategory) && (

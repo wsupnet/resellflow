@@ -111,7 +111,7 @@ export default function ImportPanel() {
       <BackupRestore />
       <ImportOne
         label="Import inventory"
-        hint="CSV columns: title (required), sku, category, condition, status, source, location, costUsd, costJpy, estimatedValue, purchasedAt, type (personal), notes. Each row creates a new single item."
+        hint="CSV columns: title (required), sku, category, condition, status, source, location, costUsd, costJpy, estimatedValue, purchasedAt, dateApprox (yes = best-guess date), type (personal), notes. Each row creates a new single item."
         action={importInventoryCsv}
         templateHref="/api/export?type=template-inventory"
       />

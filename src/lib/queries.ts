@@ -235,13 +235,15 @@ export async function getItemDetail(userId: string, itemId: string) {
       if (!f?.sold) continue;
       variantSold++;
       const sd = bundle.sales.find((s) => s.lines.some((l) => l.itemId === i.id))?.soldAt;
-      if (sd) { variantDaysSum += Math.max(0, Math.round((+new Date(sd) - +new Date(p.purchasedAt)) / 86400000)); variantDaysN++; }
+      if (sd && !p.purchasedAtApprox) { variantDaysSum += Math.max(0, Math.round((+new Date(sd) - +new Date(p.purchasedAt)) / 86400000)); variantDaysN++; }
     }
   }
   const variantAvgDaysToSell = variantDaysN ? variantDaysSum / variantDaysN : null;
   const tracksCond = tracksCondition(cat);
 
-  return { item, lot, fin, sale, fees, expenses, daysToSell, daysInStock, variantSold, variantAvgDaysToSell, tracksCond };
+  const dateApprox = lot.purchasedAtApprox;
+
+  return { item, lot, fin, sale, fees, expenses, daysToSell, daysInStock, dateApprox, variantSold, variantAvgDaysToSell, tracksCond };
 }
 
 /** All of a user's saved sourcing locations (for pickers + the Locations page). */
@@ -394,7 +396,11 @@ export async function getVariantStats(userId: string): Promise<VariantStat[]> {
   const saleOf = new Map<string, number>();
   for (const s of bundle.sales) for (const l of s.lines) saleOf.set(l.itemId, +new Date(s.soldAt));
   const purchaseOf = new Map<string, number>();
-  for (const p of bundle.purchases) for (const i of p.items) purchaseOf.set(i.id, +new Date(p.purchasedAt));
+  // Best-guess purchase dates are skipped so they don't skew avg days-to-sell.
+  for (const p of bundle.purchases) {
+    if (p.purchasedAtApprox) continue;
+    for (const i of p.items) purchaseOf.set(i.id, +new Date(p.purchasedAt));
+  }
 
   interface Agg {
     productId: string;

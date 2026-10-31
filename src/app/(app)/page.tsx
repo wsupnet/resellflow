@@ -96,7 +96,8 @@ export default async function DashboardPage() {
   // count matters — no double-flagging in the UI, just three funnel numbers.
   const nowMs = Date.now();
   const daysUnsold = (purchasedAt: Date) => Math.floor((nowMs - +purchasedAt) / 86400000);
-  const inStockAges = bundle.purchases.flatMap((p) =>
+  // Best-guess purchase dates are left out — their age isn't trustworthy.
+  const inStockAges = bundle.purchases.filter((p) => !p.purchasedAtApprox).flatMap((p) =>
     p.items.filter((i) => i.status === "UNLISTED" || i.status === "LISTED").map(() => daysUnsold(p.purchasedAt))
   );
   const aging = [30, 60, 90].map((days) => ({ days, n: inStockAges.filter((a) => a >= days).length })).filter((a) => a.n > 0);

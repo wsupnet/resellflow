@@ -7,7 +7,7 @@ import { Net, Roi } from "@/components/ui";
 import { SortableTh, FilterSelect, Pagination } from "@/components/TableControls";
 import { resolvePer, paginate } from "@/lib/paginate";
 import SubNav from "@/components/SubNav";
-import { fmtMoney, shortDate } from "@/lib/format";
+import { fmtMoney, purchaseDate } from "@/lib/format";
 import { getMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -107,7 +107,7 @@ export default async function LotsPage({
                       ? locName.get(p.locationId)
                       : <span className="text-slate-400">{p.source}</span>}
                   </td>
-                  <td className="td whitespace-nowrap text-slate-500" data-label="Date">{shortDate(p.purchasedAt)}</td>
+                  <td className="td whitespace-nowrap text-slate-500" data-label="Date"><span title={p.purchasedAtApprox ? "Approximate purchase date" : undefined}>{purchaseDate(p)}</span></td>
                   <td className="td" data-label="Cost">{fmtMoney(roll.cost, m)}{m.currency !== "JPY" && p.costJpy ? <span className="ml-1 text-xs text-slate-400">¥{p.costJpy}</span> : null}</td>
                   <td className="td text-slate-500" data-label="Sold">{roll.soldCount}/{roll.itemCount}</td>
                   <td className="td" data-label="Net"><Net value={roll.net} m={m} /></td>

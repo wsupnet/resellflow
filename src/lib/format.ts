@@ -59,3 +59,7 @@ export function fmtDeduction(amount: number, m: MoneyCtx, yen?: number): { text:
 
 export const shortDate = (d: Date | string | null | undefined): string =>
   d == null ? "—" : new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+
+/** Purchase date, prefixed with "~" when it's only a best guess. */
+export const purchaseDate = (p: { purchasedAt: Date | string; purchasedAtApprox?: boolean }): string =>
+  (p.purchasedAtApprox ? "~" : "") + shortDate(p.purchasedAt);

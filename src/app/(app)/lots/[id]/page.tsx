@@ -9,7 +9,7 @@ import { editDistance } from "@/lib/normalize";
 import { getMoney, fmtMoney } from "@/lib/money";
 import ConfirmButton from "@/components/ConfirmButton";
 import { StatCard, Net, Roi, StatusPill } from "@/components/ui";
-import { jpy, shortDate } from "@/lib/format";
+import { jpy, purchaseDate, shortDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +71,7 @@ export default async function LotDetailPage({ params }: { params: { id: string }
           <Link href="/lots" className="text-sm text-brand-600">← All lots</Link>
           <h1 className="text-2xl font-bold">{purchase.title}</h1>
           <p className="text-sm text-slate-500">
-            {purchase.kind === "LOT" ? "Lot" : "Single"} · {purchase.source} · {shortDate(purchase.purchasedAt)}
+            {purchase.kind === "LOT" ? "Lot" : "Single"} · {purchase.source} · {purchaseDate(purchase)}
             {purchase.location && <> · 📍 {purchase.location.name}</>}
           </p>
         </div>
@@ -116,6 +116,9 @@ export default async function LotDetailPage({ params }: { params: { id: string }
             <div>
               <label className="label">Purchased</label>
               <input name="purchasedAt" type="date" defaultValue={new Date(purchase.purchasedAt).toISOString().slice(0, 10)} className="input" />
+              <label className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                <input type="checkbox" name="purchasedAtApprox" defaultChecked={purchase.purchasedAtApprox} /> Approximate (best guess)
+              </label>
             </div>
             <div>
               <label className="label">Lot cost ($)</label>

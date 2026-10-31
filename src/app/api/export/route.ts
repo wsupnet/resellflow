@@ -58,9 +58,9 @@ export async function GET(req: Request) {
     const csv =
       type === "template-inventory"
         ? [
-            "title,sku,category,condition,status,source,location,costUsd,costJpy,estimatedValue,purchasedAt,type,notes",
-            '"Final Fantasy VI (Super Famicom)",4988601007498,Video Game,"Complete (CIB)",UNLISTED,Book Off,"Book Off Downtown",18.50,2970,45,2026-01-15,,"example row — delete me"',
-            '"Vintage Band Tee",,Apparel,,LISTED,Personal Belongings,,,,25,2026-02-01,personal,"personal item: no cost, excluded from flip ROI"'
+            "title,sku,category,condition,status,source,location,costUsd,costJpy,estimatedValue,purchasedAt,dateApprox,type,notes",
+            '"Final Fantasy VI (Super Famicom)",4988601007498,Video Game,"Complete (CIB)",UNLISTED,Book Off,"Book Off Downtown",18.50,2970,45,2026-01-15,,,"example row — delete me"',
+            '"Vintage Band Tee",,Apparel,,LISTED,Personal Belongings,,,,25,2026-02-01,yes,personal,"personal item: no cost, excluded from flip ROI; dateApprox=yes means best-guess date"'
           ].join("\n")
         : [
             "title,sku,salePrice,platform,soldAt,shippingFee,ebayFee,mercariFee,adFee",
