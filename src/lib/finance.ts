@@ -5,7 +5,8 @@
  *
  *  1. LOT COST ALLOCATION. A lot is bought for one price (+ tax). Its cost is
  *     spread across the items it contains, weighted by each item's sale price
- *     (the user's chosen method). Unsold items fall back to their estimated
+ *     (the user's chosen method) — except bundle-sale prices, which are themselves
+ *     derived from cost and so count as unknown. Unsold items fall back to their estimated
  *     value, then to an even split. A per-item manual override wins outright.
  *
  *  2. CROSS-LOT / BUNDLE SALES & ROLL-UP. A sale can contain items from several
@@ -50,6 +51,10 @@ export interface FinItem {
   costOverrideUsd: number | null;
   // The sale line this item sold on, if any. salePrice is its gross.
   salePrice: number | null;
+  // True when salePrice is a share of a bundle total (itself derived from cost),
+  // so it's ignored as a cost-allocation weight — otherwise cost and price would
+  // each be computed from the other.
+  priceAllocated?: boolean;
 }
 
 export interface FinLot {
@@ -84,7 +89,7 @@ export function allocateLot(lot: FinLot): Map<string, number> {
   }
 
   const weightOf = (i: FinItem): number | null => {
-    if (i.salePrice != null && i.salePrice > 0) return i.salePrice;
+    if (i.salePrice != null && i.salePrice > 0 && !i.priceAllocated) return i.salePrice;
     if (i.estimatedValue != null && i.estimatedValue > 0) return i.estimatedValue;
     return null;
   };
@@ -104,6 +109,50 @@ export function allocateLot(lot: FinLot): Map<string, number> {
   const total = filled.reduce((a, b) => a + b, 0) || 1;
   pool.forEach((i, idx) => {
     result.set(i.id, remaining * (filled[idx] / total));
+  });
+  return result;
+}
+
+// ─────────────── bundle sale splitting ───────────────
+
+export interface BundleLine {
+  itemId: string;
+  cost: number; // the item's allocated acquisition cost
+  lockedPrice: number | null; // a price you typed for this line; null = derive it
+}
+
+/**
+ * Splits a bundle sale's single total across its lines. Lines with a typed
+ * (locked) price keep it; the rest of the total is shared by the other lines in
+ * proportion to their acquisition cost, so each one shows the bundle's own ROI
+ * instead of a guess. A $0-cost line (e.g. a personal belonging) weighs as the
+ * average cost of the others, and with no cost signal at all it's an even split.
+ * `decimals` sets the rounding (2 for dollars, 0 for yen); the last derived line
+ * absorbs the rounding so the prices always sum to the total.
+ */
+export function splitBundle(total: number, lines: BundleLine[], decimals = 2): Map<string, number> {
+  const result = new Map<string, number>();
+  const f = 10 ** decimals;
+  const round = (n: number) => Math.round(n * f) / f;
+  let remaining = total;
+  for (const l of lines) {
+    if (l.lockedPrice == null) continue;
+    result.set(l.itemId, l.lockedPrice);
+    remaining -= l.lockedPrice;
+  }
+  const open = lines.filter((l) => l.lockedPrice == null);
+  if (open.length === 0) return result;
+  remaining = Math.max(0, round(remaining));
+
+  const known = open.map((l) => l.cost).filter((c) => c > EPS);
+  const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 1;
+  const weights = open.map((l) => (l.cost > EPS ? l.cost : avg));
+  const wsum = weights.reduce((a, b) => a + b, 0) || 1;
+  let acc = 0;
+  open.forEach((l, idx) => {
+    const share = idx === open.length - 1 ? round(remaining - acc) : round((remaining * weights[idx]) / wsum);
+    acc = round(acc + share);
+    result.set(l.itemId, share);
   });
   return result;
 }

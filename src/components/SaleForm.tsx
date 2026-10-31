@@ -18,7 +18,7 @@ export interface SellableItem {
   isLot: boolean;
   estimatedValue: number | null;
   condition: string | null; // only set for condition-tracked categories
-  suggestedValue: number | null; // best-known value (comp → estimate → history) for splitting a lot total
+  cost: number; // allocated acquisition cost (USD) — the weight for splitting a bundle total
 }
 
 export interface FeeSettings {
@@ -38,23 +38,33 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
   const [autoFees, setAutoFees] = useState(true);
   const [priceMode, setPriceMode] = useState<"each" | "total">("each");
   const [totalInput, setTotalInput] = useState("");
+  // Lines whose price you typed over in total mode — they keep that price and the
+  // rest of the total splits around them.
+  const [locked, setLocked] = useState<Record<string, boolean>>({});
 
-  // Split a single total across the selected items, weighted by each item's
-  // best-known value (comp → estimate → sale history), even where unknown. Cents
-  // are reconciled so the per-item prices sum exactly to the total.
-  function distribute(totalStr: string, sel: SellableItem[]) {
+  // Preview of the bundle split: the total is shared by each item's acquisition
+  // cost (so every item shows the bundle's ROI), skipping locked lines. A $0-cost
+  // item weighs as the average of the others. Cents are reconciled so the prices
+  // sum exactly to the total. The server re-derives the same split on save
+  // (lib/bundles.ts) and keeps it in step with later cost changes.
+  function distribute(totalStr: string, sel: SellableItem[], lock: Record<string, boolean> = locked, base: Record<string, string> = prices) {
     const total = parseAmt(totalStr);
     if (!totalStr || total <= 0 || sel.length === 0) return;
-    const present = sel.map((i) => i.suggestedValue).filter((v): v is number => v != null && v > 0);
-    const avg = present.length ? present.reduce((a, b) => a + b, 0) / present.length : 0;
-    const weights = sel.map((i) => (i.suggestedValue != null && i.suggestedValue > 0 ? i.suggestedValue : avg || 1));
-    const wsum = weights.reduce((a, b) => a + b, 0);
-    const next: Record<string, string> = { ...prices };
+    const dec = currency === "JPY" ? 0 : 2;
+    const f = 10 ** dec;
+    const round = (n: number) => Math.round(n * f) / f;
+    const open = sel.filter((i) => !lock[i.id]);
+    const remaining = Math.max(0, round(total - sel.filter((i) => lock[i.id]).reduce((a, i) => a + parseAmt(base[i.id]), 0)));
+    const known = open.map((i) => i.cost).filter((c) => c > 0);
+    const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 1;
+    const weights = open.map((i) => (i.cost > 0 ? i.cost : avg));
+    const wsum = weights.reduce((a, b) => a + b, 0) || 1;
+    const next: Record<string, string> = { ...base };
     let acc = 0;
-    sel.forEach((i, idx) => {
-      const share = idx === sel.length - 1 ? Math.round((total - acc) * 100) / 100 : Math.round(((total * weights[idx]) / wsum) * 100) / 100;
-      if (idx < sel.length - 1) acc = Math.round((acc + share) * 100) / 100;
-      next[i.id] = share.toFixed(2);
+    open.forEach((i, idx) => {
+      const share = idx === open.length - 1 ? round(remaining - acc) : round((remaining * weights[idx]) / wsum);
+      acc = round(acc + share);
+      next[i.id] = share.toFixed(dec);
     });
     setPrices(next);
   }
@@ -119,6 +129,7 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
     setPrices({});
     setSearch("");
     setTotalInput("");
+    setLocked({});
     setPriceMode("each");
     setManual({ ebayFee: "", mercariFee: "", adFee: "", shippingFee: "" });
     setAutoFees(true);
@@ -218,7 +229,7 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
               placeholder="one price for all selected items"
             />
             <p className="mt-1 text-xs text-slate-400">
-              Split across selected items by each one&apos;s value (comp → estimate → past sales), evenly where unknown. Edit any line below to fine-tune.
+              Split by what each item cost you, so every item shows this bundle&apos;s return. Type a price on a line to lock it; the rest re-splits.
             </p>
             {chosen.length > 0 && parseAmt(totalInput) > 0 && (
               <p className={`mt-1 text-xs ${Math.abs(total - parseAmt(totalInput)) < 0.005 ? "text-slate-400" : "text-amber-600"}`}>
@@ -242,8 +253,12 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
                     const checked = e.target.checked;
                     const ns = { ...selected, [i.id]: checked };
                     setSelected(ns);
+                    // (Un)ticking resets the line to the split.
+                    const nl = { ...locked };
+                    delete nl[i.id];
+                    setLocked(nl);
                     if (priceMode === "total" && totalInput) {
-                      distribute(totalInput, items.filter((x) => ns[x.id]));
+                      distribute(totalInput, items.filter((x) => ns[x.id]), nl);
                     } else if (checked && !prices[i.id] && i.estimatedValue) {
                       setPrices((p) => ({ ...p, [i.id]: String(i.estimatedValue) }));
                     }
@@ -262,9 +277,17 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
                     <input
                       inputMode="decimal"
                       value={prices[i.id] ?? ""}
-                      onChange={(e) => setPrices((p) => ({ ...p, [i.id]: e.target.value }))}
-                      className="input w-24 py-1"
+                      onChange={(e) => {
+                        const np = { ...prices, [i.id]: e.target.value };
+                        if (priceMode === "total" && totalInput) {
+                          const nl = { ...locked, [i.id]: true };
+                          setLocked(nl);
+                          distribute(totalInput, chosen, nl, np);
+                        } else setPrices(np);
+                      }}
+                      className={`input w-24 py-1 ${priceMode === "total" && locked[i.id] ? "border-brand-500" : ""}`}
                       placeholder="price"
+                      title={priceMode === "total" && locked[i.id] ? "Locked — the rest of the total splits around this price" : undefined}
                     />
                   </span>
                 )}
@@ -282,8 +305,16 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
             <input type="hidden" name={`price_${i.id}`} value={toUsd(parseAmt(prices[i.id])).toFixed(2)} />
             {/* Exact entered yen rides along when the ¥ toggle is on. */}
             {isYen && <input type="hidden" name={`priceJpy_${i.id}`} value={parseAmt(prices[i.id]) || ""} />}
+            {priceMode === "total" && locked[i.id] && <input type="hidden" name={`locked_${i.id}`} value="1" />}
           </span>
         ))}
+        {/* One-total bundle: the server keeps the split tied to this total. */}
+        {priceMode === "total" && chosen.length > 1 && parseAmt(totalInput) > 0 && (
+          <>
+            <input type="hidden" name="bundleTotal" value={toUsd(parseAmt(totalInput)).toFixed(2)} />
+            {isYen && <input type="hidden" name="bundleTotalJpy" value={parseAmt(totalInput)} />}
+          </>
+        )}
       </div>
 
       <div className="rounded-lg bg-slate-50 p-3">

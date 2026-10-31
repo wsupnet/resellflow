@@ -11,6 +11,7 @@ import { passwordProblem } from "./password";
 import { normalizeKey, similarity } from "./normalize";
 import { setFlash } from "./flash";
 import { likeLiteral, normalizeEmail } from "./email";
+import { rebalanceBundles } from "./bundles";
 import { UPLOAD_DIR, encodePhoto, isPhotoId, isStoredPhoto, photoPath, parsePhotoFileName } from "./uploads";
 
 export async function clearFlash() {
@@ -220,6 +221,7 @@ export async function addItemToLot(fd: FormData) {
     }
   });
   await setFlash(`Added “${title}” to the lot`);
+  await rebalanceBundles(user.id);
   revalidateAll();
 }
 
@@ -338,6 +340,7 @@ export async function addLotItem(fd: FormData): Promise<{ itemId: string; count:
   const photo = fd.get("photo");
   if (photo instanceof File && photo.size > 0 && firstId) await storeItemPhoto(user.id, firstId, photo);
 
+  await rebalanceBundles(user.id);
   revalidateAll();
   const count = await prisma.item.count({ where: { purchaseId: lotId } });
   return { itemId: firstId, count };
@@ -356,6 +359,7 @@ export async function addLooseLotItems(fd: FormData): Promise<{ added: number }>
     const product = await ensureProduct(user.id, t, category);
     await prisma.item.create({ data: { userId: user.id, purchaseId: lotId, productId: product.id, title: t, status: "UNLISTED" } });
   }
+  await rebalanceBundles(user.id);
   revalidateAll();
   return { added: lines.length };
 }
@@ -483,6 +487,7 @@ export async function updateItem(fd: FormData) {
     await applyItemSku(user.id, { id: item.id, productId: item.productId, title: title || item.title }, str(fd.get("sku")));
   }
   await setFlash("Item updated");
+  await rebalanceBundles(user.id);
   revalidateAll();
 }
 
@@ -540,6 +545,7 @@ export async function bulkUpdateItems(fd: FormData) {
 
   if (count === 0) return;
   await setFlash(`Updated ${count} item${count === 1 ? "" : "s"}`);
+  await rebalanceBundles(user.id);
   revalidateAll();
 }
 
@@ -602,6 +608,7 @@ export async function deleteItem(fd: FormData) {
   const id = str(fd.get("id"));
   await prisma.item.deleteMany({ where: { id, userId: user.id } });
   await setFlash("Item deleted");
+  await rebalanceBundles(user.id);
   revalidateAll();
 }
 
@@ -633,6 +640,7 @@ export async function updateLot(fd: FormData) {
 
   await prisma.purchase.update({ where: { id }, data });
   await setFlash("Lot updated");
+  await rebalanceBundles(user.id);
   revalidateAll();
 }
 
@@ -641,6 +649,7 @@ export async function deletePurchase(fd: FormData) {
   const id = str(fd.get("id"));
   await prisma.purchase.deleteMany({ where: { id, userId: user.id } });
   await setFlash("Purchase deleted");
+  await rebalanceBundles(user.id);
   revalidateAll();
   // The lot detail page would 404 after its record is gone, so send the user back.
   redirect("/lots");
@@ -663,10 +672,16 @@ export async function recordSale(fd: FormData) {
   // exact typed yen amount rides along (salePrice is its USD conversion).
   const ownedCount = await prisma.item.count({ where: { id: { in: itemIds }, userId: user.id } });
   if (ownedCount !== new Set(itemIds).size) throw new Error("Item not found");
+  // "One total" mode: the buyer paid a single price for several items. Lines you
+  // didn't type a price for are flagged `allocated`; their prices are re-derived
+  // from the total by cost share (rebalanceBundles below), not trusted as typed.
+  const bundleTotal = itemIds.length > 1 ? num(fd.get("bundleTotal")) : null;
+  const isBundle = bundleTotal != null && bundleTotal > 0;
   const lines = itemIds.map((itemId) => ({
     itemId,
     salePrice: num(fd.get(`price_${itemId}`)) ?? 0,
-    priceJpy: num(fd.get(`priceJpy_${itemId}`))
+    priceJpy: num(fd.get(`priceJpy_${itemId}`)),
+    allocated: isBundle && fd.get(`locked_${itemId}`) == null
   }));
 
   const platformRaw = str(fd.get("platform")).toUpperCase();
@@ -693,6 +708,10 @@ export async function recordSale(fd: FormData) {
         ebayFeeJpy: num(fd.get("ebayFeeJpy")),
         mercariFeeJpy: num(fd.get("mercariFeeJpy")),
         adFeeJpy: num(fd.get("adFeeJpy")),
+        bundleTotal: isBundle ? bundleTotal : null,
+        bundleTotalJpy: isBundle ? num(fd.get("bundleTotalJpy")) : null,
+        // Entered as a bundle (or priced one by one) on purpose — nothing to review.
+        bundleReviewed: true,
         notes: str(fd.get("notes")) || null,
         lines: { create: lines }
       }
@@ -702,6 +721,7 @@ export async function recordSale(fd: FormData) {
       data: { status: "SOLD" }
     })
   ]);
+  await rebalanceBundles(user.id);
   await setFlash(`Sale recorded · ${itemIds.length} item${itemIds.length === 1 ? "" : "s"}`);
   revalidateAll();
 }
@@ -748,15 +768,73 @@ export async function updateSale(fd: FormData) {
     }
   });
 
-  // Update any line whose price field was provided (a changed price drops its
-  // stored entered-yen for the same reason).
-  for (const l of sale.lines) {
-    const p = num(fd.get(`price_${l.itemId}`));
-    if (p != null && p !== l.salePrice) await prisma.saleItem.update({ where: { id: l.id }, data: { salePrice: p, priceJpy: null } });
+  // Bundle sale: the total is editable, and "re-split" hands every line back to
+  // the cost-share split (undoing any prices typed over it).
+  const resplit = sale.bundleTotal != null && fd.get("resplit") != null;
+  if (sale.bundleTotal != null) {
+    const bt = num(fd.get("bundleTotal"));
+    if (bt != null && bt > 0 && Math.abs(bt - sale.bundleTotal) >= 0.005) {
+      await prisma.sale.update({ where: { id }, data: { bundleTotal: bt, bundleTotalJpy: null } });
+    }
+    if (resplit) await prisma.saleItem.updateMany({ where: { saleId: id }, data: { allocated: true } });
   }
 
+  // Update any line whose price field was provided (a changed price drops its
+  // stored entered-yen for the same reason). On a bundle, typing a price locks
+  // that line; the rest of the total re-splits around it.
+  if (!resplit) {
+    for (const l of sale.lines) {
+      const p = num(fd.get(`price_${l.itemId}`));
+      if (p != null && Math.abs(p - l.salePrice) >= 0.005) await prisma.saleItem.update({ where: { id: l.id }, data: { salePrice: p, priceJpy: null, allocated: false } });
+    }
+  }
+
+  await rebalanceBundles(user.id);
   await setFlash("Sale updated");
   revalidateAll();
+}
+
+/**
+ * Turn recorded multi-item sales into bundle sales: the current line prices sum
+ * to the bundle total, then every line is re-split by cost share. Used by the
+ * bundle review screen (one sale or many at once) for sales recorded before
+ * bundles were tracked.
+ */
+export async function convertToBundle(fd: FormData) {
+  const user = await requireUser();
+  const ids = fd.getAll("saleId").map(String).filter(Boolean);
+  const sales = await prisma.sale.findMany({ where: { id: { in: ids }, userId: user.id }, include: { lines: true } });
+  for (const s of sales) {
+    if (s.lines.length < 2) continue;
+    const total = Math.round(s.lines.reduce((a, l) => a + l.salePrice, 0) * 100) / 100;
+    const allYen = s.lines.every((l) => l.priceJpy != null);
+    await prisma.$transaction([
+      prisma.sale.update({
+        where: { id: s.id },
+        data: { bundleTotal: total, bundleTotalJpy: allYen ? s.lines.reduce((a, l) => a + (l.priceJpy ?? 0), 0) : null, bundleReviewed: true }
+      }),
+      prisma.saleItem.updateMany({ where: { saleId: s.id }, data: { allocated: true } })
+    ]);
+  }
+  await rebalanceBundles(user.id);
+  await setFlash(`Converted ${sales.length} sale${sales.length === 1 ? "" : "s"} to bundle pricing`);
+  revalidateAll();
+  revalidatePath("/sales/bundles");
+}
+
+/** Mark multi-item sales as genuinely priced item by item (review screen), or
+ *  turn a bundle sale back into one — current line prices are kept as typed. */
+export async function markPricedIndividually(fd: FormData) {
+  const user = await requireUser();
+  const ids = fd.getAll("saleId").map(String).filter(Boolean);
+  const owned = (await prisma.sale.findMany({ where: { id: { in: ids }, userId: user.id }, select: { id: true } })).map((s) => s.id);
+  await prisma.$transaction([
+    prisma.sale.updateMany({ where: { id: { in: owned } }, data: { bundleTotal: null, bundleTotalJpy: null, bundleReviewed: true } }),
+    prisma.saleItem.updateMany({ where: { saleId: { in: owned } }, data: { allocated: false } })
+  ]);
+  await setFlash(owned.length === 1 ? "Kept as priced item by item" : `Kept ${owned.length} sales as priced item by item`);
+  revalidateAll();
+  revalidatePath("/sales/bundles");
 }
 
 export async function deleteSale(fd: FormData) {
@@ -770,6 +848,7 @@ export async function deleteSale(fd: FormData) {
     prisma.item.updateMany({ where: { id: { in: itemIds }, userId: user.id }, data: { status: "UNLISTED" } })
   ]);
   await setFlash("Sale removed · items back in stock");
+  await rebalanceBundles(user.id);
   revalidateAll();
 }
 
@@ -1042,6 +1121,7 @@ export async function importSalesCsv(fd: FormData): Promise<ImportResult> {
     ]);
     created++;
   }
+  await rebalanceBundles(user.id);
   revalidateAll();
   return { created, skipped };
 }
@@ -1107,7 +1187,7 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
       // 4) Sales
       if (Array.isArray(d.sales) && d.sales.length) {
         const r = await tx.sale.createMany({
-          data: d.sales.map((s: any) => ({ id: s.id, userId: uid, platform: s.platform, soldAt: D(s.soldAt), fxRate: s.fxRate ?? null, shippingFee: s.shippingFee ?? 0, ebayFee: s.ebayFee ?? 0, mercariFee: s.mercariFee ?? 0, adFee: s.adFee ?? 0, shippingFeeJpy: s.shippingFeeJpy ?? null, ebayFeeJpy: s.ebayFeeJpy ?? null, mercariFeeJpy: s.mercariFeeJpy ?? null, adFeeJpy: s.adFeeJpy ?? null, notes: s.notes ?? null })),
+          data: d.sales.map((s: any) => ({ id: s.id, userId: uid, platform: s.platform, soldAt: D(s.soldAt), fxRate: s.fxRate ?? null, shippingFee: s.shippingFee ?? 0, ebayFee: s.ebayFee ?? 0, mercariFee: s.mercariFee ?? 0, adFee: s.adFee ?? 0, shippingFeeJpy: s.shippingFeeJpy ?? null, ebayFeeJpy: s.ebayFeeJpy ?? null, mercariFeeJpy: s.mercariFeeJpy ?? null, adFeeJpy: s.adFeeJpy ?? null, bundleTotal: s.bundleTotal ?? null, bundleTotalJpy: s.bundleTotalJpy ?? null, bundleReviewed: s.bundleReviewed ?? false, notes: s.notes ?? null })),
           skipDuplicates: true
         });
         counts.sales = r.count;
@@ -1118,7 +1198,7 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
       const lines = (d.saleItems ?? []).filter((l: any) => saleIds.has(l.saleId) && itemIds.has(l.itemId));
       if (lines.length) {
         const r = await tx.saleItem.createMany({
-          data: lines.map((l: any) => ({ id: l.id, saleId: l.saleId, itemId: l.itemId, salePrice: l.salePrice ?? 0, priceJpy: l.priceJpy ?? null })),
+          data: lines.map((l: any) => ({ id: l.id, saleId: l.saleId, itemId: l.itemId, salePrice: l.salePrice ?? 0, priceJpy: l.priceJpy ?? null, allocated: l.allocated ?? false })),
           skipDuplicates: true
         });
         counts.saleItems = r.count;
@@ -1254,6 +1334,7 @@ export async function restoreBackup(fd: FormData): Promise<{ error?: string; cou
     counts.photoFiles = written;
   }
 
+  await rebalanceBundles(user.id);
   revalidateAll();
   revalidatePath("/ledger");
   await setFlash(`Restore complete · ${Object.values(counts).reduce((a, b) => a + b, 0)} records added`);

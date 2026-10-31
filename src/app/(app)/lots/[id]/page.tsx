@@ -32,7 +32,8 @@ export default async function LotDetailPage(props: { params: Promise<{ id: strin
       status: i.status,
       estimatedValue: i.estimatedValue,
       costOverrideUsd: i.costOverrideUsd,
-      salePrice: i.saleLine?.salePrice ?? null
+      salePrice: i.saleLine?.salePrice ?? null,
+      priceAllocated: i.saleLine?.allocated ?? false
     }))
   };
   const alloc = allocateLot(finLot);

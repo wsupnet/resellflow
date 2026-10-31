@@ -57,7 +57,8 @@ export async function getFinancials(userId: string) {
       status: i.status,
       estimatedValue: i.estimatedValue,
       costOverrideUsd: i.costOverrideUsd,
-      salePrice: i.saleLine?.salePrice ?? null
+      salePrice: i.saleLine?.salePrice ?? null,
+      priceAllocated: i.saleLine?.allocated ?? false
     }))
   }));
 
@@ -114,7 +115,8 @@ export function buildYen(bundle: FinancialsBundle, live: number) {
         status: i.status,
         estimatedValue: i.estimatedValue != null ? i.estimatedValue * pr : null,
         costOverrideUsd: i.costOverrideUsd != null ? i.costOverrideJpy ?? i.costOverrideUsd * pr : null,
-        salePrice: i.saleLine ? i.saleLine.priceJpy ?? i.saleLine.salePrice * (saleRateOfItem.get(i.id) ?? pr) : null
+        salePrice: i.saleLine ? i.saleLine.priceJpy ?? i.saleLine.salePrice * (saleRateOfItem.get(i.id) ?? pr) : null,
+        priceAllocated: i.saleLine?.allocated ?? false
       }))
     };
   });
@@ -378,23 +380,34 @@ export interface VariantStat {
   lastSaleDate: string | null;
   avgDaysToSell: number | null; // purchase date → sold date
   score: number; // blended buy-more score
+  bundleSold: number; // of timesSold, how many sold inside a bundle (price = cost share of the bundle total)
   inStock: number;
   listed: number;
   costTiedUp: number;
   thumbId: string | null;
 }
 
+/** Sales needed before a variant's ROI is trusted: ranks in the ROI lens and
+ *  counts fully in the blended score. */
+export const ROI_MIN_SALES = 3;
+
 /**
  * Per-variant stats — grouped by product, and further by condition for
  * condition-tracked categories (games/movies/etc.). Powers insights, the deal
  * checker, and the inventory stock view, including avg days-to-sell (demand).
  */
-export async function getVariantStats(userId: string): Promise<VariantStat[]> {
+export async function getVariantStats(userId: string, opts: { individualOnly?: boolean } = {}): Promise<VariantStat[]> {
   const bundle = await getFinancials(userId);
 
   // item -> sale date + gross; item -> purchase date.
   const saleOf = new Map<string, number>();
-  for (const s of bundle.sales) for (const l of s.lines) saleOf.set(l.itemId, +new Date(s.soldAt));
+  // Items whose sale price is a derived share of a bundle total, not a typed price.
+  const bundled = new Set<string>();
+  for (const s of bundle.sales)
+    for (const l of s.lines) {
+      saleOf.set(l.itemId, +new Date(s.soldAt));
+      if (l.allocated) bundled.add(l.itemId);
+    }
   const purchaseOf = new Map<string, number>();
   // Best-guess purchase dates are skipped so they don't skew avg days-to-sell.
   for (const p of bundle.purchases) {
@@ -417,6 +430,7 @@ export async function getVariantStats(userId: string): Promise<VariantStat[]> {
     roiSum: number;
     roiN: number;
     sold: number;
+    bundleSold: number;
     sales: { price: number; date: number }[];
     daysSum: number;
     daysN: number;
@@ -442,13 +456,19 @@ export async function getVariantStats(userId: string): Promise<VariantStat[]> {
           sku: i.product?.sku ?? null,
           compPrice: i.product?.compPrice ?? null,
           thumbId: null,
-          net: 0, cost: 0, buyCostSum: 0, buyN: 0, roiSum: 0, roiN: 0, sold: 0, sales: [], daysSum: 0, daysN: 0, inStock: 0, listed: 0, costTiedUp: 0
+          net: 0, cost: 0, buyCostSum: 0, buyN: 0, roiSum: 0, roiN: 0, sold: 0, bundleSold: 0, sales: [], daysSum: 0, daysN: 0, inStock: 0, listed: 0, costTiedUp: 0
         };
       if (!a.thumbId && i.photos[0]) a.thumbId = i.photos[0].id;
       const fin = bundle.itemFin.get(i.id);
       // Average acquisition cost spans every unit you've handled, sold or not.
       if (fin) { a.buyCostSum += fin.allocatedCost; a.buyN++; }
+      // "Individual sales only" leaves bundle sales out of the sales stats entirely.
+      if (fin?.sold && opts.individualOnly && bundled.has(i.id)) {
+        agg.set(key, a);
+        continue;
+      }
       if (fin?.sold) {
+        if (bundled.has(i.id)) a.bundleSold++;
         a.net += fin.net;
         a.cost += fin.allocatedCost;
         if (fin.roi != null) { a.roiSum += fin.roi; a.roiN++; }
@@ -475,7 +495,10 @@ export async function getVariantStats(userId: string): Promise<VariantStat[]> {
     const avgNet = a.sold ? a.net / a.sold : null;
     const avgRoi = a.roiN ? a.roiSum / a.roiN : null;
     const freqFactor = Math.log2(1 + a.sold);
-    const roiFactor = 1 + Math.max(-0.5, Math.min(2, avgRoi ?? 0));
+    // ROI from one or two sales is mostly luck, so its pull on the blended score
+    // ramps up with sales count and only counts in full from ROI_MIN_SALES on.
+    const roiConfidence = Math.min(1, a.sold / ROI_MIN_SALES);
+    const roiFactor = 1 + Math.max(-0.5, Math.min(2, avgRoi ?? 0)) * roiConfidence;
     return {
       key,
       productId: a.productId,
@@ -497,6 +520,7 @@ export async function getVariantStats(userId: string): Promise<VariantStat[]> {
       lastSaleDate: sales[0]?.date ? new Date(sales[0].date).toISOString() : null,
       avgDaysToSell: a.daysN ? a.daysSum / a.daysN : null,
       score: (avgNet ?? 0) * freqFactor * roiFactor,
+      bundleSold: a.bundleSold,
       inStock: a.inStock,
       listed: a.listed,
       costTiedUp: a.costTiedUp,

@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db";
 import { getFinancials } from "@/lib/queries";
 import { tracksCondition } from "@/lib/catalog";
 import { getFxRate } from "@/lib/fx";
-import { deleteSale, updateSale } from "@/lib/actions";
+import Link from "next/link";
+import { deleteSale, updateSale, convertToBundle, markPricedIndividually } from "@/lib/actions";
 import ConfirmButton from "@/components/ConfirmButton";
 import { sortRows, dirOf } from "@/lib/sort";
 import SaleForm, { type SellableItem, type FeeSettings } from "@/components/SaleForm";
@@ -37,26 +38,6 @@ export default async function SalesPage(
     defaultShipping: settings.defaultShipping
   };
 
-  // Best-known value per product, from its own sales history — used as a fallback
-  // weight when splitting a lot's total sale price and no comp/estimate is set.
-  const prodOfItem = new Map<string, string>();
-  for (const p of bundle.purchases) for (const i of p.items) if (i.productId) prodOfItem.set(i.id, i.productId);
-  const soldAgg = new Map<string, { sum: number; n: number }>();
-  for (const s of bundle.sales)
-    for (const l of s.lines) {
-      const pid = prodOfItem.get(l.itemId);
-      if (!pid) continue;
-      const a = soldAgg.get(pid) ?? { sum: 0, n: 0 };
-      a.sum += l.salePrice;
-      a.n++;
-      soldAgg.set(pid, a);
-    }
-  const histAvgOf = (pid: string | null) => {
-    if (!pid) return null;
-    const a = soldAgg.get(pid);
-    return a && a.n ? a.sum / a.n : null;
-  };
-
   const sellable: SellableItem[] = [];
   for (const p of bundle.purchases) {
     for (const i of p.items) {
@@ -70,8 +51,8 @@ export default async function SalesPage(
           estimatedValue: i.estimatedValue,
           // Only surface condition where the category tracks it (games/movies/etc.).
           condition: tracksCondition(i.product?.category) ? i.condition : null,
-          // Cascade for the total-price split: comp → estimate → own sale history → (even fallback in the form).
-          suggestedValue: i.product?.compPrice ?? i.estimatedValue ?? histAvgOf(i.productId)
+          // Weight for splitting a one-total bundle price.
+          cost: bundle.itemFin.get(i.id)?.allocatedCost ?? 0
         });
       }
     }
@@ -103,10 +84,19 @@ export default async function SalesPage(
   const sortedSales = sortRows(saleRows, getters[sort] ?? getters.date, dir);
   const per = resolvePer(searchParams.per, (await cookies()).get("pageSize")?.value);
   const pg = paginate(sortedSales, searchParams.page, per);
+  // Multi-item sales recorded before bundles were tracked, still awaiting review.
+  const toReview = bundle.sales.filter((s) => s.lines.length > 1 && s.bundleTotal == null && !s.bundleReviewed).length;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Sales</h1>
+
+      {toReview > 0 && (
+        <Link href="/sales/bundles" className="block rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 hover:bg-amber-100">
+          <span className="font-medium">{toReview} multi-item sale{toReview === 1 ? "" : "s"} to review</span> — tell the app which were sold as one bundle price so
+          their profit is split fairly. <span className="font-medium underline">Review →</span>
+        </Link>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1fr]">
         <MobileCollapse label="+ Record a sale">
@@ -151,6 +141,7 @@ export default async function SalesPage(
                           <span className="inline-block transition-transform group-open:rotate-90">▸</span>
                           <span className="whitespace-nowrap">{shortDate(s.soldAt)}</span>
                           <span className="pill bg-slate-100 text-slate-600">{s.platform.toLowerCase()}</span>
+                          {s.bundleTotal != null && <span className="pill bg-purple-100 text-purple-700">bundle</span>}
                         </div>
                         <div className="mt-0.5 truncate pl-4 text-sm font-medium text-slate-800">
                           {s.lines[0]?.item.title ?? "—"}
@@ -187,6 +178,8 @@ export default async function SalesPage(
                               {fmtMoney(l.salePrice, m)}
                               {/* Exact yen as entered, when the sale was recorded in ¥. */}
                               {l.priceJpy != null && <span className="ml-1 text-xs text-slate-400">¥{l.priceJpy.toLocaleString()}</span>}
+                              {/* A bundle's derived share vs. a price typed over it. */}
+                              {s.bundleTotal != null && <span className="block text-xs text-purple-700">{l.allocated ? "share of bundle" : "price set"}</span>}
                               {/* Acquisition cost (a lot's cost split across its items) so the COGS below is traceable. */}
                               <span className="block text-xs text-slate-400">cost {fmtMoney(cost, m)}</span>
                             </span>
@@ -259,9 +252,20 @@ export default async function SalesPage(
                           <label className="label text-[11px]">Sold date</label>
                           <input name="soldAt" type="date" defaultValue={new Date(s.soldAt).toISOString().slice(0, 10)} className="input py-1.5 text-sm" />
                         </div>
+                        {s.bundleTotal != null && (
+                          <div className="col-span-2 border-t border-slate-100 pt-2">
+                            <label className="label text-[11px]">Bundle total ($)</label>
+                            <input name="bundleTotal" inputMode="decimal" defaultValue={s.bundleTotal} className="input py-1.5 text-sm" />
+                            <label className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                              <input type="checkbox" name="resplit" /> Re-split every line by cost (clears prices typed below)
+                            </label>
+                          </div>
+                        )}
                         {s.lines.length > 0 && (
                           <div className="col-span-2 space-y-1 border-t border-slate-100 pt-2">
-                            <div className="text-[11px] font-medium text-slate-500">Sold-for price per item</div>
+                            <div className="text-[11px] font-medium text-slate-500">
+                              Sold-for price per item{s.bundleTotal != null && " — changing one locks it; the rest of the total re-splits"}
+                            </div>
                             {s.lines.map((l) => (
                               <div key={l.id} className="flex items-center gap-2">
                                 <span className="grow truncate text-xs text-slate-600">{l.item.title}</span>
@@ -278,6 +282,14 @@ export default async function SalesPage(
                           <button className="btn-primary py-1.5 text-sm">Save changes</button>
                         </div>
                       </form>
+                      {s.lines.length > 1 && (
+                        <form action={s.bundleTotal != null ? markPricedIndividually : convertToBundle} className="mt-2">
+                          <input type="hidden" name="saleId" value={s.id} />
+                          <button className="text-xs text-brand-600 hover:underline">
+                            {s.bundleTotal != null ? "Not a bundle — keep these prices as typed" : "Sold as one bundle price — split by cost"}
+                          </button>
+                        </form>
+                      )}
                     </details>
                     </div>
                   </details>

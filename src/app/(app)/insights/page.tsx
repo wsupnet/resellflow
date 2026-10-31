@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { getVariantStats, type VariantStat } from "@/lib/queries";
+import { getVariantStats, ROI_MIN_SALES, type VariantStat } from "@/lib/queries";
 import { HBarChart } from "@/components/Charts";
 import { Roi } from "@/components/ui";
 import SubNav from "@/components/SubNav";
@@ -17,7 +17,7 @@ type SortKey = "score" | "profit" | "roi" | "freq" | "speed";
 const SORTS: { key: SortKey; label: string; help: string }[] = [
   { key: "score", label: "Blended", help: "profit per sale × how often it sells × ROI — the default buy-more signal" },
   { key: "profit", label: "Total profit", help: "most total net profit earned" },
-  { key: "roi", label: "ROI", help: "highest average return on cost" },
+  { key: "roi", label: "ROI", help: `highest average return on cost — needs ${ROI_MIN_SALES}+ sales to rank, so one lucky sale can't top the list` },
   { key: "freq", label: "Most sold", help: "highest number of times sold" },
   { key: "speed", label: "Fastest selling", help: "shortest average days from purchase to sold" }
 ];
@@ -25,18 +25,24 @@ const SORTS: { key: SortKey; label: string; help: string }[] = [
 function sortStats(stats: VariantStat[], key: SortKey): VariantStat[] {
   const c = [...stats];
   if (key === "profit") return c.sort((a, b) => b.totalNet - a.totalNet);
-  if (key === "roi") return c.sort((a, b) => (b.avgRoi ?? -Infinity) - (a.avgRoi ?? -Infinity));
+  if (key === "roi") {
+    // Too few sales to trust the ROI → ranked after every variant that has enough.
+    const trusted = (s: VariantStat) => (s.timesSold >= ROI_MIN_SALES ? 1 : 0);
+    return c.sort((a, b) => trusted(b) - trusted(a) || (b.avgRoi ?? -Infinity) - (a.avgRoi ?? -Infinity));
+  }
   if (key === "freq") return c.sort((a, b) => b.timesSold - a.timesSold);
   if (key === "speed") return c.sort((a, b) => (a.avgDaysToSell ?? Infinity) - (b.avgDaysToSell ?? Infinity));
   return c.sort((a, b) => b.score - a.score);
 }
 
 export default async function InsightsPage(
-  props: { searchParams: Promise<{ sort?: string; page?: string; per?: string }> }
+  props: { searchParams: Promise<{ sort?: string; sales?: string; page?: string; per?: string }> }
 ) {
   const searchParams = await props.searchParams;
   const user = await requireUser();
-  const [all, m] = await Promise.all([getVariantStats(user.id), getMoney(user.id)]);
+  // "individual" drops bundle sales (whose per-item price is a cost-share estimate).
+  const individualOnly = searchParams.sales === "individual";
+  const [all, m] = await Promise.all([getVariantStats(user.id, { individualOnly }), getMoney(user.id)]);
   // Insights is about what sells — only variants with at least one sale.
   const stats = all.filter((s) => s.timesSold > 0);
 
@@ -44,6 +50,15 @@ export default async function InsightsPage(
     ? searchParams.sort
     : "score") as SortKey;
   const sorted = sortStats(stats, sort);
+  const qs = (o: { sort?: string; sales?: string }) => {
+    const p = new URLSearchParams();
+    const so = o.sort ?? sort;
+    const sa = o.sales ?? (individualOnly ? "individual" : "");
+    if (so !== "score") p.set("sort", so);
+    if (sa) p.set("sales", sa);
+    const q = p.toString();
+    return q ? `/insights?${q}` : "/insights";
+  };
 
   const u = moneyUnit(m);
   const chartData = sorted.slice(0, 10).map((s) => ({
@@ -79,17 +94,25 @@ export default async function InsightsPage(
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-1 text-sm">
+      <div className="flex flex-wrap items-center gap-1 text-sm">
         {SORTS.map((s) => (
           <Link
             key={s.key}
-            href={`/insights?sort=${s.key}`}
+            href={qs({ sort: s.key })}
             title={s.help}
             className={`rounded-lg px-3 py-1.5 font-medium ${sort === s.key ? "bg-brand-50 text-brand-700" : "text-slate-500 hover:bg-slate-100"}`}
           >
             {s.label}
           </Link>
         ))}
+        <div className="ml-auto flex gap-1 rounded-lg bg-slate-100 p-0.5 text-xs" title="Bundle sales split one price across items by cost, so their per-item numbers are estimates">
+          <Link href={qs({ sales: "" })} scroll={false} className={`rounded px-2 py-1 font-medium ${!individualOnly ? "bg-white shadow-sm" : "text-slate-500"}`}>
+            All sales
+          </Link>
+          <Link href={qs({ sales: "individual" })} scroll={false} className={`rounded px-2 py-1 font-medium ${individualOnly ? "bg-white shadow-sm" : "text-slate-500"}`}>
+            Individual only
+          </Link>
+        </div>
       </div>
       <p className="-mt-3 text-xs text-slate-400">{SORTS.find((s) => s.key === sort)?.help}</p>
 
@@ -132,10 +155,22 @@ export default async function InsightsPage(
                 {pg.rows.map((s) => (
                   <tr key={s.key} className="border-b border-slate-50">
                     <td className="td cell-main font-medium" data-label="">{s.name}</td>
-                    <td className="td" data-label="Times sold">{s.timesSold}</td>
+                    <td className="td" data-label="Times sold">
+                      {s.timesSold}
+                      {s.bundleSold > 0 && (
+                        <span className="ml-1.5 pill bg-purple-100 text-purple-700" title="Sold inside a bundle — that sale's price was split across its items by cost">
+                          {s.bundleSold === s.timesSold ? "all in bundles" : `${s.bundleSold} in bundle${s.bundleSold === 1 ? "" : "s"}`}
+                        </span>
+                      )}
+                    </td>
                     <td className="td" data-label="Total net">{fmtMoney(s.totalNet, m)}</td>
                     <td className="td" data-label="Avg net / sale">{fmtMoney(s.avgNet, m)}</td>
-                    <td className="td" data-label="Avg ROI"><Roi value={s.avgRoi} /></td>
+                    <td className="td" data-label="Avg ROI">
+                      <Roi value={s.avgRoi} />
+                      {s.avgRoi != null && s.timesSold < ROI_MIN_SALES && (
+                        <span className="block text-[10px] text-slate-400" title={`Fewer than ${ROI_MIN_SALES} sales — too few to trust this ROI`}>few sales</span>
+                      )}
+                    </td>
                     <td className="td" data-label="Avg days to sell">{s.avgDaysToSell == null ? "—" : `${Math.round(s.avgDaysToSell)}d`}</td>
                     <td className="td text-slate-500" data-label="Blended score">{s.score.toFixed(1)}</td>
                   </tr>

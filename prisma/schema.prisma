@@ -213,6 +213,16 @@ model Sale {
   mercariFeeJpy  Float?
   adFeeJpy       Float?
 
+  // "One total" bundle sale: the single price the buyer paid for everything.
+  // When set, every line flagged `allocated` gets its price re-derived from this
+  // total, split by each item's share of acquisition cost (see lib/bundles.ts).
+  // Null for sales priced item by item.
+  bundleTotal    Float?
+  bundleTotalJpy Float? // exact yen typed, when entered in yen
+  // Set once a multi-item sale has been looked at on the bundle review screen
+  // (converted or confirmed "priced individually"), so it stops being flagged.
+  bundleReviewed Boolean @default(false)
+
   notes       String?
 
   lines       SaleItem[]
@@ -235,6 +245,10 @@ model SaleItem {
   // The exact yen amount entered when the sale was recorded in yen (salePrice
   // is its USD conversion). Null when entered in USD.
   priceJpy  Float?
+  // True when salePrice is this line's derived share of the sale's bundleTotal,
+  // not a price you typed. Such a price is an estimate: it never weights lot cost
+  // allocation, and Insights badges it as a bundle sale.
+  allocated Boolean  @default(false)
 
   @@index([saleId])
 }
