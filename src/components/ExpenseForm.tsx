@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createExpense } from "@/lib/actions";
+import { useCurrencyPrefs } from "./CurrencyPrefs";
 
 export interface AttachOption {
   value: string; // "" | "purchase:id" | "item:id" | "sale:id"
@@ -18,6 +19,7 @@ export default function ExpenseForm({ attachOptions, rate, defaultCurrency = "JP
   const [attach, setAttach] = useState("");
   const [sign, setSign] = useState<1 | -1>(1);
   const [amount, setAmount] = useState("");
+  const { single } = useCurrencyPrefs();
   const [cur, setCur] = useState<"USD" | "JPY">(defaultCurrency);
   const groups: AttachOption["group"][] = ["General", "Lots", "Items", "Sales"];
 
@@ -72,14 +74,18 @@ export default function ExpenseForm({ attachOptions, rate, defaultCurrency = "JP
         <label className="label">Amount</label>
         <div className="flex gap-2">
           <input value={amount} onChange={(e) => setAmount(magnitude(e.target.value))} inputMode="decimal" required className="input" placeholder={cur === "JPY" ? "e.g. 3000" : "e.g. 90"} />
-          <select value={cur} onChange={(e) => setCur(e.target.value as "USD" | "JPY")} className="input w-20">
-            <option>JPY</option>
-            <option>USD</option>
-          </select>
+          {single ? (
+            <span className="self-center text-sm text-slate-500">{cur === "JPY" ? "¥" : "$"}</span>
+          ) : (
+            <select value={cur} onChange={(e) => setCur(e.target.value as "USD" | "JPY")} className="input w-20">
+              <option>JPY</option>
+              <option>USD</option>
+            </select>
+          )}
         </div>
         <input type="hidden" name="amountUsd" value={signedUsd} />
         <input type="hidden" name="amountJpy" value={signedJpy} />
-        {cur === "JPY" && valid && (
+        {!single && cur === "JPY" && valid && (
           <p className="mt-1 text-xs text-slate-400">≈ ${usdVal.toFixed(2)} at ¥{rate.toFixed(1)}/$1</p>
         )}
       </div>

@@ -23,7 +23,7 @@ const MORE: NavItem[] = [
   { href: "/settings", label: "Settings", match: ["/settings", "/locations"] }
 ];
 
-export default function Nav({ email, isAdmin, currency }: { email: string; isAdmin: boolean; currency: "USD" | "JPY" }) {
+export default function Nav({ email, isAdmin, currency, showToggle = true }: { email: string; isAdmin: boolean; currency: "USD" | "JPY"; showToggle?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false); // mobile menu
   const [more, setMore] = useState(false); // desktop "More" dropdown
@@ -73,7 +73,7 @@ export default function Nav({ email, isAdmin, currency }: { email: string; isAdm
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          <CurrencyToggle current={currency} />
+          {showToggle && <CurrencyToggle current={currency} />}
           <span className="hidden text-xs text-slate-500 sm:inline">
             {email}
             {isAdmin ? " · admin" : ""}

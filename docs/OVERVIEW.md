@@ -141,7 +141,8 @@ sales add up to it, so there are no mystery totals.
 ### ⚙️ Settings
 
 - **Fees**: eBay, Mercari, ad and default shipping rates (past sales keep the rates they were recorded with)
-- **Display**: USD or yen, today's or historical exchange rate (your own rate, or fetched automatically if
+- **Display**: USD or yen as your primary currency, the other one as an optional second (or turn it off),
+  today's or historical exchange rate (your own rate, or fetched automatically if
   you opt in), light/dark/off-white theme
 - **Privacy**: outside services (exchange rate, online barcode lookup) are off until you switch them on
 - **Export & import**: CSV export of inventory, sales, lots and expenses; CSV import; full

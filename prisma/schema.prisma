@@ -63,6 +63,9 @@ model Settings {
   // rate for everything; "historical" = each transaction's locked rate.
   homeCurrency    String  @default("USD")
   fxMode          String  @default("live")
+  // true = the user works in homeCurrency only: no $/¥ toggle, no currency
+  // pickers on entry forms (the other currency is never offered).
+  singleCurrency  Boolean @default(false)
 
   // The "current" USD/JPY rate. Off by default for privacy: the manual rate is used
   // and nothing leaves the server. On = fetched hourly from FX_API_URL.
@@ -295,6 +298,10 @@ model Product {
   // Optional manual "going rate" comp the user pastes from eBay sold / 130point.
   compPrice     Float?
   compNotes     String?
+
+  // Products the user said are NOT the same as this one, so the lot page stops
+  // suggesting a name-based link between them (stored on both sides).
+  notSameAs     String[] @default([])
 
   items         Item[]
 

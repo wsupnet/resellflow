@@ -1,5 +1,6 @@
 import { getSessionUser } from "@/lib/auth";
-import { getFinancials } from "@/lib/queries";
+import { getFinancials, yenView } from "@/lib/queries";
+import { toView } from "@/lib/format";
 import { prisma } from "@/lib/db";
 import { resolveRange, normalizePeriod } from "@/lib/period";
 import { getMoney } from "@/lib/money";
@@ -201,10 +202,12 @@ export async function GET(req: Request) {
     const { start, end } = resolveRange(normalizePeriod(sp.get("period") ?? undefined), sp.get("from") ?? undefined, sp.get("to") ?? undefined);
     const inRange = (d: Date) => d >= start && d <= end;
 
-    // Honor the yen/USD view toggle (cookie). Money columns are converted at the
-    // live rate; a `currency` column makes the amounts unambiguous for accounting.
+    // Honor the yen/USD view toggle (cookie). Yen columns use the live rate, or each
+    // transaction's locked rate in Historical mode; a `currency` column makes the
+    // amounts unambiguous for accounting.
     const m = await getMoney(user.id);
-    const money = (n: number) => (m.currency === "JPY" ? Math.round(n * m.rate) : r2(n));
+    const yv = yenView(bundle, m);
+    const money = (n: number, yen?: number) => (m.currency === "JPY" ? Math.round(toView(n, m, yen)) : r2(n));
     const locs = await prisma.location.findMany({ where: { userId: user.id }, select: { id: true, name: true } });
     const locName = new Map(locs.map((l) => [l.id, l.name]));
     const saleByItem = new Map<string, (typeof bundle.sales)[number]>();
@@ -220,6 +223,7 @@ export async function GET(req: Request) {
       if (!s || !inRange(new Date(s.soldAt))) continue;
       const p = purchaseByItem.get(itemId);
       const i = itemById.get(itemId);
+      const fy = yv?.fin(itemId);
       rows.push([
         new Date(s.soldAt).toISOString().slice(0, 10),
         i?.title ?? "",
@@ -229,7 +233,7 @@ export async function GET(req: Request) {
         p?.source ?? "",
         p?.locationId ? locName.get(p.locationId) ?? "" : "",
         m.currency,
-        money(f.gross), money(f.feeShare), money(f.allocatedCost), money(f.expense), money(f.net)
+        money(f.gross, fy?.gross), money(f.feeShare, fy?.feeShare), money(f.allocatedCost, fy?.allocatedCost), money(f.expense, fy?.expense), money(f.net, fy?.net)
       ]);
     }
     rows.sort((a, b) => String(a[0]).localeCompare(String(b[0])));

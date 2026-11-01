@@ -8,6 +8,7 @@ import { Net, Roi, StatusPill } from "@/components/ui";
 import { CATEGORIES, conditionsFor, tracksCondition } from "@/lib/catalog";
 import ScanButton from "@/components/ScanButton";
 import ConfirmButton from "@/components/ConfirmButton";
+import { useCurrencyPrefs } from "@/components/CurrencyPrefs";
 
 export interface ItemRowData {
   id: string;
@@ -25,6 +26,7 @@ export interface ItemRowData {
   gross: number;
   net: number | null;
   roi: number | null;
+  yen?: { allocatedCost: number; gross: number; net: number }; // Historical-mode yen at locked rates
   timesSold: number;
   addedAt: string;
   daysInStock: number | null; // days sitting unsold (in-stock items only)
@@ -52,6 +54,7 @@ export default function ItemRow({
   rate: number;
   m: MoneyCtx;
 }) {
+  const { single } = useCurrencyPrefs();
   const [open, setOpen] = useState(false);
   const [sku, setSku] = useState(data.sku ?? "");
   const [category, setCategory] = useState(data.category ?? "");
@@ -130,13 +133,13 @@ export default function ItemRow({
         <td className="td" data-label="Status"><StatusPill status={data.status} /></td>
         <td className="td whitespace-nowrap text-slate-500" data-label="Added">{shortDate(data.addedAt)}</td>
         <td className="td" data-label="Cost">
-          {fmtMoney(data.allocatedCost, m)}
+          {fmtMoney(data.allocatedCost, m, data.yen?.allocatedCost)}
           {data.costOverrideJpy != null && <span className="ml-1 text-xs text-slate-400">¥{data.costOverrideJpy.toLocaleString()}</span>}
           {data.costOverrideUsd != null && <span className="ml-1 text-xs text-amber-600">override</span>}
         </td>
-        <td className="td" data-label="Sold for">{data.gross ? fmtMoney(data.gross, m) : "—"}</td>
+        <td className="td" data-label="Sold for">{data.gross ? fmtMoney(data.gross, m, data.yen?.gross) : "—"}</td>
         {/* Net shows for settled items: sold (profit) or written off (the loss). */}
-        <td className="td" data-label="Net"><Net value={data.status === "SOLD" || data.status === "LOST" || data.status === "DAMAGED" ? data.net : null} m={m} /></td>
+        <td className="td" data-label="Net"><Net value={data.status === "SOLD" || data.status === "LOST" || data.status === "DAMAGED" ? data.net : null} m={m} yen={data.yen?.net} /></td>
         <td className="td" data-label="ROI"><Roi value={data.status === "SOLD" ? data.roi : null} /></td>
         <td className="td cell-action text-right" data-label="">
           <button
@@ -223,19 +226,24 @@ export default function ItemRow({
                     className="input"
                     placeholder="blank = auto split"
                   />
-                  <select
-                    value={overrideCur}
-                    onChange={(e) => setOverrideCur(e.target.value as "USD" | "JPY")}
-                    className="input w-20"
-                  >
-                    <option>USD</option>
-                    <option>JPY</option>
-                  </select>
+                  {/* One-currency mode still shows the picker for an override stored in the other currency. */}
+                  {single && overrideCur === m.currency ? (
+                    <span className="self-center text-sm text-slate-500">{overrideCur === "JPY" ? "¥" : "$"}</span>
+                  ) : (
+                    <select
+                      value={overrideCur}
+                      onChange={(e) => setOverrideCur(e.target.value as "USD" | "JPY")}
+                      className="input w-20"
+                    >
+                      <option>USD</option>
+                      <option>JPY</option>
+                    </select>
+                  )}
                 </div>
                 {/* Always submitted in USD; the exact entered yen rides along when typed in ¥. */}
                 <input type="hidden" name="costOverrideUsd" value={overrideUsd} />
                 <input type="hidden" name="costOverrideJpy" value={overrideCur === "JPY" && overrideUsd !== "" ? override : ""} />
-                {overrideCur === "JPY" && overrideUsd !== "" && (
+                {!single && overrideCur === "JPY" && overrideUsd !== "" && (
                   <p className="mt-1 text-xs text-slate-400">≈ ${overrideUsd} at ¥{rate.toFixed(1)}/$1</p>
                 )}
               </div>

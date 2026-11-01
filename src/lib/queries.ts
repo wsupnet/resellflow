@@ -139,7 +139,7 @@ export function buildYen(bundle: FinancialsBundle, live: number) {
     if (e.saleId && saleRateById.has(e.saleId)) r = saleRateById.get(e.saleId)!;
     else if (e.purchaseId && purchaseRateById.has(e.purchaseId)) r = purchaseRateById.get(e.purchaseId)!;
     else if (e.itemId && saleRateOfItem.has(e.itemId)) r = saleRateOfItem.get(e.itemId)!;
-    const amt = e.amountUsd * r;
+    const amt = e.amountJpy ?? e.amountUsd * r;
     expenseYenById.set(e.id, amt);
     return { amountUsd: amt, purchaseId: e.purchaseId, itemId: e.itemId, saleId: e.saleId };
   });
@@ -149,6 +149,22 @@ export function buildYen(bundle: FinancialsBundle, live: number) {
   const lotsYenById = new Map(lotsYen.map((l) => [l.id as string, l]));
   return { lotsYen, lotsYenById, itemFinYen, generalYen, expenseYenById };
 }
+
+/**
+ * Per-row yen at locked rates for tables, or null unless the view is yen in
+ * Historical mode. Pages pass these as fmtMoney's `yen` argument next to the
+ * USD figure, summing both sides the same way.
+ */
+export function yenView(bundle: FinancialsBundle, m: { currency: string; mode: string; rate: number }) {
+  if (m.currency !== "JPY" || m.mode !== "historical") return null;
+  const y = buildYen(bundle, m.rate);
+  return {
+    ...y,
+    fin: (itemId: string) => y.itemFinYen.get(itemId),
+    roll: (purchaseId: string) => rollupLot(y.lotsYenById.get(purchaseId)!, y.itemFinYen)
+  };
+}
+export type YenView = NonNullable<ReturnType<typeof yenView>>;
 
 /** Portfolio totals in yen at locked rates (for Historical mode). */
 export function totalsYen(bundle: FinancialsBundle, live: number): Totals {
@@ -262,9 +278,10 @@ export function summarizeLots(bundle: FinancialsBundle) {
 }
 
 /** Monthly net-profit series for charts (by sale month). */
-export async function getMonthlySeries(userId: string) {
+export async function getMonthlySeries(userId: string, m?: { currency: string; mode: string; rate: number }) {
   const bundle = await getFinancials(userId);
-  const byMonth = new Map<string, { gross: number; net: number; fees: number }>();
+  const yv = m ? yenView(bundle, m) : null; // Historical mode: also sum yen at locked rates
+  const byMonth = new Map<string, { gross: number; net: number; fees: number; grossYen?: number; netYen?: number }>();
 
   for (const sale of bundle.sales) {
     const key = new Date(sale.soldAt).toISOString().slice(0, 7); // YYYY-MM
@@ -275,6 +292,11 @@ export async function getMonthlySeries(userId: string) {
       entry.gross += f.gross;
       entry.fees += f.feeShare;
       entry.net += f.net;
+      const fy = yv?.fin(line.itemId);
+      if (fy) {
+        entry.grossYen = (entry.grossYen ?? 0) + fy.gross;
+        entry.netYen = (entry.netYen ?? 0) + fy.net;
+      }
     }
     byMonth.set(key, entry);
   }
@@ -287,6 +309,7 @@ export async function getMonthlySeries(userId: string) {
       const key = new Date(i.writtenOffAt ?? i.createdAt).toISOString().slice(0, 7);
       const entry = byMonth.get(key) ?? { gross: 0, net: 0, fees: 0 };
       entry.net -= bundle.itemFin.get(i.id)?.allocatedCost ?? 0;
+      if (yv) entry.netYen = (entry.netYen ?? 0) - (yv.fin(i.id)?.allocatedCost ?? 0);
       byMonth.set(key, entry);
     }
 
@@ -297,9 +320,9 @@ export async function getMonthlySeries(userId: string) {
 
 export interface SeasonalityData {
   // 12 rows (Jan…Dec), aggregating every year together.
-  byMonth: { month: number; label: string; units: number; gross: number; net: number }[];
+  byMonth: { month: number; label: string; units: number; gross: number; net: number; grossYen?: number; netYen?: number }[];
   // Per category: which calendar month it sells the most (by units), + totals.
-  byCategory: { category: string; peakMonth: string; units: number; gross: number; net: number }[];
+  byCategory: { category: string; peakMonth: string; units: number; gross: number; net: number; grossYen?: number; netYen?: number }[];
   yearsSpanned: number; // distinct calendar years with a sale — for the "thin data" note
   totalSales: number;
 }
@@ -312,12 +335,13 @@ const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
  * revenue/net counts in the calendar month it sold. Also computes each category's
  * peak selling month.
  */
-export async function getSeasonality(userId: string): Promise<SeasonalityData> {
+export async function getSeasonality(userId: string, m?: { currency: string; mode: string; rate: number }): Promise<SeasonalityData> {
   const bundle = await getFinancials(userId);
+  const yv = m ? yenView(bundle, m) : null; // Historical mode: also sum yen at locked rates
 
-  const months = MONTH_LABELS.map((label, i) => ({ month: i, label, units: 0, gross: 0, net: 0 }));
+  const months = MONTH_LABELS.map((label, i) => ({ month: i, label, units: 0, gross: 0, net: 0, grossYen: 0, netYen: 0 }));
   // category -> per-month {units, gross, net}
-  const cat = new Map<string, { units: number; gross: number; net: number }[]>();
+  const cat = new Map<string, { units: number; gross: number; net: number; grossYen: number; netYen: number }[]>();
   const years = new Set<number>();
   let totalSales = 0;
 
@@ -332,15 +356,20 @@ export async function getSeasonality(userId: string): Promise<SeasonalityData> {
     for (const l of s.lines) {
       const f = bundle.itemFin.get(l.itemId);
       if (!f) continue;
+      const fy = yv?.fin(l.itemId);
       months[mi].units += 1;
       months[mi].gross += f.gross;
       months[mi].net += f.net;
+      months[mi].grossYen += fy?.gross ?? 0;
+      months[mi].netYen += fy?.net ?? 0;
 
       const c = catOf.get(l.itemId) || "Uncategorized";
-      const arr = cat.get(c) ?? MONTH_LABELS.map(() => ({ units: 0, gross: 0, net: 0 }));
+      const arr = cat.get(c) ?? MONTH_LABELS.map(() => ({ units: 0, gross: 0, net: 0, grossYen: 0, netYen: 0 }));
       arr[mi].units += 1;
       arr[mi].gross += f.gross;
       arr[mi].net += f.net;
+      arr[mi].grossYen += fy?.gross ?? 0;
+      arr[mi].netYen += fy?.net ?? 0;
       cat.set(c, arr);
     }
   }
@@ -352,11 +381,14 @@ export async function getSeasonality(userId: string): Promise<SeasonalityData> {
       const units = arr.reduce((a, b) => a + b.units, 0);
       const gross = arr.reduce((a, b) => a + b.gross, 0);
       const net = arr.reduce((a, b) => a + b.net, 0);
-      return { category, peakMonth: units > 0 ? MONTH_LABELS[peak] : "—", units, gross, net };
+      const yen = yv ? { grossYen: arr.reduce((a, b) => a + b.grossYen, 0), netYen: arr.reduce((a, b) => a + b.netYen, 0) } : {};
+      return { category, peakMonth: units > 0 ? MONTH_LABELS[peak] : "—", units, gross, net, ...yen };
     })
     .sort((a, b) => b.units - a.units);
 
-  return { byMonth: months, byCategory, yearsSpanned: years.size, totalSales };
+  // Yen fields only mean something in Historical mode.
+  const byMonth = yv ? months : months.map(({ grossYen: _g, netYen: _n, ...rest }) => rest);
+  return { byMonth, byCategory, yearsSpanned: years.size, totalSales };
 }
 
 export interface VariantStat {
@@ -371,6 +403,7 @@ export interface VariantStat {
   timesSold: number;
   totalNet: number;
   avgNet: number | null;
+  totalNetYen?: number; // Historical-mode yen at locked rates
   avgRoi: number | null;
   totalCost: number;
   avgBuyPrice: number | null; // avg acquisition cost per unit (USD), sold + in-stock
@@ -396,8 +429,12 @@ export const ROI_MIN_SALES = 3;
  * condition-tracked categories (games/movies/etc.). Powers insights, the deal
  * checker, and the inventory stock view, including avg days-to-sell (demand).
  */
-export async function getVariantStats(userId: string, opts: { individualOnly?: boolean } = {}): Promise<VariantStat[]> {
+export async function getVariantStats(
+  userId: string,
+  opts: { individualOnly?: boolean; m?: { currency: string; mode: string; rate: number } } = {}
+): Promise<VariantStat[]> {
   const bundle = await getFinancials(userId);
+  const yv = opts.m ? yenView(bundle, opts.m) : null; // Historical mode: also sum yen net
 
   // item -> sale date + gross; item -> purchase date.
   const saleOf = new Map<string, number>();
@@ -424,6 +461,7 @@ export async function getVariantStats(userId: string, opts: { individualOnly?: b
     compPrice: number | null;
     thumbId: string | null;
     net: number;
+    netYen: number;
     cost: number;
     buyCostSum: number; // acquisition cost of every unit (sold + in-stock)
     buyN: number;
@@ -456,7 +494,7 @@ export async function getVariantStats(userId: string, opts: { individualOnly?: b
           sku: i.product?.sku ?? null,
           compPrice: i.product?.compPrice ?? null,
           thumbId: null,
-          net: 0, cost: 0, buyCostSum: 0, buyN: 0, roiSum: 0, roiN: 0, sold: 0, bundleSold: 0, sales: [], daysSum: 0, daysN: 0, inStock: 0, listed: 0, costTiedUp: 0
+          net: 0, netYen: 0, cost: 0, buyCostSum: 0, buyN: 0, roiSum: 0, roiN: 0, sold: 0, bundleSold: 0, sales: [], daysSum: 0, daysN: 0, inStock: 0, listed: 0, costTiedUp: 0
         };
       if (!a.thumbId && i.photos[0]) a.thumbId = i.photos[0].id;
       const fin = bundle.itemFin.get(i.id);
@@ -470,6 +508,7 @@ export async function getVariantStats(userId: string, opts: { individualOnly?: b
       if (fin?.sold) {
         if (bundled.has(i.id)) a.bundleSold++;
         a.net += fin.net;
+        a.netYen += yv?.fin(i.id)?.net ?? 0;
         a.cost += fin.allocatedCost;
         if (fin.roi != null) { a.roiSum += fin.roi; a.roiN++; }
         a.sold++;
@@ -511,6 +550,7 @@ export async function getVariantStats(userId: string, opts: { individualOnly?: b
       timesSold: a.sold,
       totalNet: a.net,
       avgNet,
+      ...(yv ? { totalNetYen: a.netYen } : {}),
       avgRoi,
       totalCost: a.cost,
       avgBuyPrice: a.buyN ? a.buyCostSum / a.buyN : null,

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { getFinancials } from "@/lib/queries";
+import { getFinancials, yenView } from "@/lib/queries";
 import { getMoney, fmtMoney } from "@/lib/money";
 import { normalizePeriod, resolveRange, type Period } from "@/lib/period";
 import { StatCard, StatusPill, Net, SectionTitle } from "@/components/ui";
@@ -27,6 +27,7 @@ interface Row {
   exp: number;
   net: number;
   est: number | null;
+  y?: { gross: number; fees: number; cost: number; exp: number; net: number; est: number }; // Historical-mode yen
 }
 
 const METRIC_INFO: Record<Metric, { title: string; blurb: string }> = {
@@ -64,6 +65,7 @@ export default async function BreakdownPage(
   const searchParams = await props.searchParams;
   const user = await requireUser();
   const [bundle, m] = await Promise.all([getFinancials(user.id), getMoney(user.id)]);
+  const yv = yenView(bundle, m); // Historical-mode yen, else null
 
   const metric = (Object.keys(METRIC_INFO).includes(searchParams.metric ?? "") ? searchParams.metric : "realized") as Metric;
   const period: Period = searchParams.period ? normalizePeriod(searchParams.period) : "all";
@@ -99,7 +101,14 @@ export default async function BreakdownPage(
         cost: f.allocatedCost,
         exp: f.expense,
         net: f.net,
-        est: i.estimatedValue
+        est: i.estimatedValue,
+        y: yv
+          ? (() => {
+              const fy = yv.fin(i.id);
+              const est = yv.lotsYenById.get(p.id)?.items.find((x) => x.id === i.id)?.estimatedValue ?? 0;
+              return { gross: fy?.gross ?? 0, fees: fy?.feeShare ?? 0, cost: fy?.allocatedCost ?? 0, exp: fy?.expense ?? 0, net: fy?.net ?? 0, est };
+            })()
+          : undefined
       });
     }
   }
@@ -142,30 +151,40 @@ export default async function BreakdownPage(
   const exp = sum((r) => r.exp) + generalTotal;
   const net = gross - fees - cost - exp;
   const spend = cost + fees + exp;
+  // The same sums in yen (Historical mode); undefined elsewhere so fmtMoney converts live.
+  const eY = (e: { id: string }) => yv?.expenseYenById.get(e.id) ?? 0;
+  const sumY = (k: keyof NonNullable<Row["y"]>) => (yv ? rows.reduce((a, r) => a + (r.y?.[k] ?? 0), 0) : undefined);
+  const generalTotalY = yv ? generalExpenses.reduce((a, e) => a + eY(e), 0) : undefined;
+  const Y = yv
+    ? (() => {
+        const g = sumY("gross")!, f = sumY("fees")!, c = sumY("cost")!, x = sumY("exp")! + generalTotalY!;
+        return { gross: g, fees: f, cost: c, exp: x, net: g - f - c - x, spend: c + f + x, est: sumY("est")! };
+      })()
+    : undefined;
 
   // Header cards per metric — the FIRST one reconciles to the dashboard card.
   const header =
     metric === "gross"
       ? [
-          { label: "Gross sales", value: fmtMoney(gross, m), tone: "default" as const },
+          { label: "Gross sales", value: fmtMoney(gross, m, Y?.gross), tone: "default" as const },
           { label: "Items sold", value: String(rows.length) },
-          { label: "Net after all costs", value: fmtMoney(net, m), tone: net >= 0 ? ("good" as const) : ("bad" as const) }
+          { label: "Net after all costs", value: fmtMoney(net, m, Y?.net), tone: net >= 0 ? ("good" as const) : ("bad" as const) }
         ]
       : metric === "stock"
         ? [
             { label: "Items in stock", value: String(rows.length) },
-            { label: "Cost tied up", value: fmtMoney(cost, m) },
-            { label: "Est. resale value", value: fmtMoney(rows.reduce((a, r) => a + (r.est ?? 0), 0), m) }
+            { label: "Cost tied up", value: fmtMoney(cost, m, Y?.cost) },
+            { label: "Est. resale value", value: fmtMoney(rows.reduce((a, r) => a + (r.est ?? 0), 0), m, Y?.est) }
           ]
         : metric === "flip"
           ? [
-              { label: "Flip net", value: fmtMoney(net, m), tone: net >= 0 ? ("good" as const) : ("bad" as const) },
-              { label: "Total spend", value: fmtMoney(spend, m) },
+              { label: "Flip net", value: fmtMoney(net, m, Y?.net), tone: net >= 0 ? ("good" as const) : ("bad" as const) },
+              { label: "Total spend", value: fmtMoney(spend, m, Y?.spend) },
               { label: "Flip ROI", value: spend > 0 ? pct(net / spend) : "—", tone: net >= 0 ? ("good" as const) : ("bad" as const) }
             ]
           : [
-              { label: METRIC_INFO[metric].title.replace(" — audit", ""), value: fmtMoney(net, m), tone: net >= 0 ? ("good" as const) : ("bad" as const) },
-              { label: "Gross − fees − cost − exp", value: `${fmtMoney(gross, m)} − ${fmtMoney(fees, m)} − ${fmtMoney(cost, m)} − ${fmtMoney(exp, m)}` },
+              { label: METRIC_INFO[metric].title.replace(" — audit", ""), value: fmtMoney(net, m, Y?.net), tone: net >= 0 ? ("good" as const) : ("bad" as const) },
+              { label: "Gross − fees − cost − exp", value: `${fmtMoney(gross, m, Y?.gross)} − ${fmtMoney(fees, m, Y?.fees)} − ${fmtMoney(cost, m, Y?.cost)} − ${fmtMoney(exp, m, Y?.exp)}` },
               { label: "Line items", value: String(rows.length + generalExpenses.length) }
             ];
 
@@ -221,11 +240,11 @@ export default async function BreakdownPage(
                   </td>
                   <td className="td" data-label="Status"><StatusPill status={r.status} /></td>
                   <td className="td whitespace-nowrap text-slate-500" data-label="Date">{r.date ? shortDate(r.date) : "—"}</td>
-                  {showMoneyCols && <td className="td" data-label="Proceeds">{r.gross ? fmtMoney(r.gross, m) : "—"}</td>}
-                  {showMoneyCols && <td className="td text-slate-500" data-label="Fees">{r.fees ? `−${fmtMoney(r.fees, m)}` : "—"}</td>}
-                  <td className="td text-slate-500" data-label="Cost">{r.cost ? `−${fmtMoney(r.cost, m)}` : "—"}</td>
-                  {showMoneyCols && <td className={r.exp ? (r.exp < 0 ? "td text-emerald-600" : "td text-slate-500") : "td text-slate-500"} data-label="Exp">{r.exp ? fmtDeduction(r.exp, m).text : "—"}</td>}
-                  {showMoneyCols && <td className="td" data-label="Net"><Net value={r.net} m={m} /></td>}
+                  {showMoneyCols && <td className="td" data-label="Proceeds">{r.gross ? fmtMoney(r.gross, m, r.y?.gross) : "—"}</td>}
+                  {showMoneyCols && <td className="td text-slate-500" data-label="Fees">{r.fees ? `−${fmtMoney(r.fees, m, r.y?.fees)}` : "—"}</td>}
+                  <td className="td text-slate-500" data-label="Cost">{r.cost ? `−${fmtMoney(r.cost, m, r.y?.cost)}` : "—"}</td>
+                  {showMoneyCols && <td className={r.exp ? (r.exp < 0 ? "td text-emerald-600" : "td text-slate-500") : "td text-slate-500"} data-label="Exp">{r.exp ? fmtDeduction(r.exp, m, r.y?.exp).text : "—"}</td>}
+                  {showMoneyCols && <td className="td" data-label="Net"><Net value={r.net} m={m} yen={r.y?.net} /></td>}
                 </tr>
               ))}
             </tbody>
@@ -236,11 +255,11 @@ export default async function BreakdownPage(
                   <td className="td cell-main" data-label="">All items total</td>
                   <td className="td hidden md:table-cell" />
                   <td className="td hidden md:table-cell" />
-                  <td className="td" data-label="Proceeds">{fmtMoney(gross, m)}</td>
-                  <td className="td" data-label="Fees">−{fmtMoney(fees, m)}</td>
-                  <td className="td" data-label="Cost">−{fmtMoney(cost, m)}</td>
-                  <td className="td" data-label="Exp">{fmtDeduction(exp - generalTotal, m).text}</td>
-                  <td className="td" data-label="Net"><Net value={net + generalTotal} m={m} /></td>
+                  <td className="td" data-label="Proceeds">{fmtMoney(gross, m, Y?.gross)}</td>
+                  <td className="td" data-label="Fees">−{fmtMoney(fees, m, Y?.fees)}</td>
+                  <td className="td" data-label="Cost">−{fmtMoney(cost, m, Y?.cost)}</td>
+                  <td className="td" data-label="Exp">{fmtDeduction(exp - generalTotal, m, Y ? Y.exp - generalTotalY! : undefined).text}</td>
+                  <td className="td" data-label="Net"><Net value={net + generalTotal} m={m} yen={Y ? Y.net + generalTotalY! : undefined} /></td>
                 </tr>
               </tfoot>
             )}
@@ -254,7 +273,7 @@ export default async function BreakdownPage(
           <SectionTitle>General expenses &amp; credits (unattached, dated in period)</SectionTitle>
           <ul className="text-sm">
             {generalExpenses.map((e) => {
-              const d = fmtDeduction(e.amountUsd, m);
+              const d = fmtDeduction(e.amountUsd, m, yv ? eY(e) : undefined);
               return (
                 <li key={e.id} className="flex justify-between border-b border-slate-50 py-1.5 last:border-0">
                   <span className="text-slate-600">
@@ -267,7 +286,7 @@ export default async function BreakdownPage(
               );
             })}
             {(() => {
-              const d = fmtDeduction(generalTotal, m);
+              const d = fmtDeduction(generalTotal, m, generalTotalY);
               return (
                 <li className="flex justify-between pt-2 font-medium">
                   <span>General total</span>
@@ -285,7 +304,7 @@ export default async function BreakdownPage(
       {showMoneyCols && metric !== "gross" && (
         <div className="card flex items-center justify-between bg-slate-50 text-sm">
           <span className="font-semibold">Grand total{generalExpenses.length > 0 ? " (items − general expenses)" : ""} — matches the dashboard card</span>
-          <span className="text-base font-bold"><Net value={net} m={m} /></span>
+          <span className="text-base font-bold"><Net value={net} m={m} yen={Y?.net} /></span>
         </div>
       )}
     </div>

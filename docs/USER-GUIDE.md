@@ -58,8 +58,12 @@ Do this once, before you record sales, so fees are calculated correctly.
    - **Mercari fee (%)**
    - **Default shipping ($)**
 3. Pick your display options:
-   - **Default display currency**: USD or yen. You can flip it any time with the **$ / ¥** toggle in the top bar.
-   - **Yen conversion**: *Current* (today's rate) or *Historical* (the rate locked in on each purchase or sale)
+   - **Primary currency**: USD or yen. Amounts show in it, and entry forms start in it.
+   - **Second currency**: *On* adds the **$ / ¥** toggle in the top bar and a currency picker on each entry
+     form. *None* hides both, so everything uses your primary currency. Amounts already entered in the other
+     currency are kept and converted.
+   - **Yen conversion**: *Current* (today's rate) or *Historical* (the rate locked in on each purchase or sale).
+     Historical applies everywhere: cards, tables, charts and the report CSV.
    - **Today's rate (¥ per $1)**: the rate used for yen amounts, the entry forms and the Deal Checker.
      Update it now and then, or tick **Fetch today's rate automatically** to have the server get it
      about once an hour from open.er-api.com (a free exchange-rate service). Off by default: when

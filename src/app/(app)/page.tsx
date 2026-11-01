@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { getFinancials, getMonthlySeries, summarizeLots, totalsYen } from "@/lib/queries";
+import { getFinancials, getMonthlySeries, summarizeLots, totalsYen, yenView } from "@/lib/queries";
 import { tracksCondition } from "@/lib/catalog";
 import { StatCard, Net, Roi, SectionTitle } from "@/components/ui";
 import { MonthlyNetChart, HBarChart } from "@/components/Charts";
-import { pct, moneyUnit } from "@/lib/format";
+import { pct, moneyUnit, toView } from "@/lib/format";
+import type { ItemFinancials } from "@/lib/finance";
 import { getMoney, fmtMoney } from "@/lib/money";
 import InfoTip from "@/components/InfoTip";
 import { normalizePeriod, resolveRange, type Period } from "@/lib/period";
@@ -16,8 +17,8 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const user = await requireUser();
   const bundle = await getFinancials(user.id);
-  const series = await getMonthlySeries(user.id);
   const m = await getMoney(user.id);
+  const series = await getMonthlySeries(user.id, m);
   const t = bundle.totals;
   // Historical mode: yen totals at locked per-transaction rates (all-time figures only).
   const ty = m.currency === "JPY" && m.mode === "historical" ? totalsYen(bundle, m.rate) : null;
@@ -37,44 +38,64 @@ export default async function DashboardPage() {
   //    Mirrors the Reports engine: a sale's revenue/fees/COGS count in the
   //    period it SOLD; general ledger expenses count by their own date. ──
   const blankR = () => ({ gross: 0, fees: 0, cogs: 0, expense: 0, items: 0 });
-  const rFlip = blankR();
-  const rPersonal = blankR();
-  let rSales = 0;
   const soldAtByItem = new Map<string, Date>();
-  for (const s of bundle.sales) {
-    for (const l of s.lines) soldAtByItem.set(l.itemId, new Date(s.soldAt));
-    if (!inRange(s.soldAt)) continue;
-    rSales++;
-    for (const l of s.lines) {
-      const f = bundle.itemFin.get(l.itemId);
-      if (!f) continue;
-      const b = f.isPersonal ? rPersonal : rFlip;
-      b.gross += f.gross;
-      b.fees += f.feeShare;
-      b.cogs += f.allocatedCost;
-      b.expense += f.expense;
-      b.items++;
+  for (const s of bundle.sales) for (const l of s.lines) soldAtByItem.set(l.itemId, new Date(s.soldAt));
+  let rSales = 0;
+  for (const s of bundle.sales) if (inRange(s.soldAt)) rSales++;
+  // Run once in USD, and again in locked-rate yen for Historical mode.
+  const realize = (fin: (itemId: string) => ItemFinancials | undefined, expAmt: (e: (typeof bundle.expenses)[number]) => number) => {
+    const flip = blankR();
+    const personal = blankR();
+    for (const s of bundle.sales) {
+      if (!inRange(s.soldAt)) continue;
+      for (const l of s.lines) {
+        const f = fin(l.itemId);
+        if (!f) continue;
+        const b = f.isPersonal ? personal : flip;
+        b.gross += f.gross;
+        b.fees += f.feeShare;
+        b.cogs += f.allocatedCost;
+        b.expense += f.expense;
+        b.items++;
+      }
     }
-  }
-  rFlip.expense += bundle.expenses
-    .filter((e) => !e.purchaseId && !e.itemId && !e.saleId && inRange(e.date))
-    .reduce((a, e) => a + e.amountUsd, 0);
+    flip.expense += bundle.expenses
+      .filter((e) => !e.purchaseId && !e.itemId && !e.saleId && inRange(e.date))
+      .reduce((a, e) => a + expAmt(e), 0);
 
-  // Write-offs (lost/damaged) marked in the range: their cost is a realized loss.
-  const rWO = { count: 0, cost: 0 };
-  for (const p of bundle.purchases)
-    for (const i of p.items) {
-      if (i.status !== "LOST" && i.status !== "DAMAGED") continue;
-      if (!inRange(i.writtenOffAt ?? i.createdAt)) continue;
-      rWO.count++;
-      rWO.cost += bundle.itemFin.get(i.id)?.allocatedCost ?? 0;
-    }
+    // Write-offs (lost/damaged) marked in the range: their cost is a realized loss.
+    const wo = { count: 0, cost: 0 };
+    for (const p of bundle.purchases)
+      for (const i of p.items) {
+        if (i.status !== "LOST" && i.status !== "DAMAGED") continue;
+        if (!inRange(i.writtenOffAt ?? i.createdAt)) continue;
+        wo.count++;
+        wo.cost += fin(i.id)?.allocatedCost ?? 0;
+      }
+    return { flip, personal, wo };
+  };
+  const { flip: rFlip, personal: rPersonal, wo: rWO } = realize((id) => bundle.itemFin.get(id), (e) => e.amountUsd);
+  const yv = yenView(bundle, m);
+  const ry = yv ? realize(yv.fin, (e) => yv.expenseYenById.get(e.id) ?? 0) : null;
 
   const rNet = (b: ReturnType<typeof blankR>) => b.gross - b.fees - b.cogs - b.expense;
   const rSpend = (b: ReturnType<typeof blankR>) => b.cogs + b.fees + b.expense;
   // Write-off losses land in the flip bucket (personal items have no cost basis).
   const rFlipNet = rNet(rFlip) - rWO.cost;
   const rFlipRoi = rSpend(rFlip) + rWO.cost > 0 ? rFlipNet / (rSpend(rFlip) + rWO.cost) : null;
+  // The same period figures in yen (undefined outside Historical mode → fmtMoney converts live).
+  const Y = ry
+    ? {
+        flipNet: rNet(ry.flip) - ry.wo.cost,
+        personalNet: rNet(ry.personal),
+        woCost: ry.wo.cost,
+        spend: rSpend(ry.flip) + ry.wo.cost,
+        gross: ry.flip.gross + ry.personal.gross,
+        fees: ry.flip.fees + ry.personal.fees,
+        expense: ry.flip.expense + ry.personal.expense,
+        personalGross: ry.personal.gross
+      }
+    : undefined;
   const rGross = rFlip.gross + rPersonal.gross;
   const rItemsSold = rFlip.items + rPersonal.items;
   const rPurchases = bundle.purchases.filter((p) => inRange(p.purchasedAt)).length;
@@ -121,13 +142,13 @@ export default async function DashboardPage() {
     .map((f) => {
       const name = itemTitle.get(f.itemId) ?? "item";
       // Charts convert at the live rate (rate = 1 for USD). fullName feeds the hover tooltip.
-      return { name: name.length > 24 ? name.slice(0, 23) + "…" : name, fullName: name, value: f.net * m.rate };
+      return { name: name.length > 24 ? name.slice(0, 23) + "…" : name, fullName: name, value: toView(f.net, m, yv?.fin(f.itemId)?.net) };
     });
   const u = moneyUnit(m);
   const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const chartSeries = series
     .filter((s) => allTime || (s.month >= monthKey(start) && s.month <= monthKey(end)))
-    .map((s) => ({ ...s, net: s.net * m.rate, gross: s.gross * m.rate }));
+    .map((s) => ({ ...s, net: toView(s.net, m, s.netYen), gross: toView(s.gross, m, s.grossYen) }));
 
   return (
     <div className="space-y-6">
@@ -182,9 +203,9 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             label={`Net profit (${label})`}
-            value={fmtMoney(rFlipNet + rNet(rPersonal), m)}
+            value={fmtMoney(rFlipNet + rNet(rPersonal), m, Y ? Y.flipNet + Y.personalNet : undefined)}
             tone={rFlipNet + rNet(rPersonal) >= 0 ? "good" : "bad"}
-            sub={rWO.count > 0 ? `realized · incl. ${rWO.count} write-off${rWO.count === 1 ? "" : "s"} −${fmtMoney(rWO.cost, m)}` : "realized on sales in this period"}
+            sub={rWO.count > 0 ? `realized · incl. ${rWO.count} write-off${rWO.count === 1 ? "" : "s"} −${fmtMoney(rWO.cost, m, Y?.woCost)}` : "realized on sales in this period"}
             href={`/breakdown?metric=realized&period=${period}`}
             help="Profit made on sales during this period: what those items sold for, minus their fees, what they cost to buy, and expenses. Lost/damaged items marked in this period count as losses."
           />
@@ -192,14 +213,14 @@ export default async function DashboardPage() {
             label="Flip ROI"
             value={pct(rFlipRoi)}
             tone={(rFlipRoi ?? 0) >= 0 ? "good" : "bad"}
-            sub={`net / ${fmtMoney(rSpend(rFlip) + rWO.cost, m)} spend on settled items`}
+            sub={`net / ${fmtMoney(rSpend(rFlip) + rWO.cost, m, Y?.spend)} spend on settled items`}
             href={`/breakdown?metric=flip&period=${period}`}
             help="Return on the money behind this period's sales: for every $1 those items cost (purchase + fees + expenses), how much profit came back. 100% = doubled your money. Personal belongings don't count."
           />
           <StatCard
             label="Gross sales"
-            value={fmtMoney(rGross, m)}
-            sub={`fees ${fmtMoney(rFlip.fees + rPersonal.fees, m)} · exp ${fmtMoney(rFlip.expense + rPersonal.expense, m)}`}
+            value={fmtMoney(rGross, m, Y?.gross)}
+            sub={`fees ${fmtMoney(rFlip.fees + rPersonal.fees, m, Y?.fees)} · exp ${fmtMoney(rFlip.expense + rPersonal.expense, m, Y?.expense)}`}
             href={`/breakdown?metric=gross&period=${period}`}
             help="The total sticker price of everything sold in this period — before any fees, costs, or expenses come out."
           />
@@ -231,8 +252,8 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                <span>Net <b className="text-emerald-600">{fmtMoney(rNet(rPersonal), m)}</b></span>
-                <span>Gross {fmtMoney(rPersonal.gross, m)}</span>
+                <span>Net <b className="text-emerald-600">{fmtMoney(rNet(rPersonal), m, Y?.personalNet)}</b></span>
+                <span>Gross {fmtMoney(rPersonal.gross, m, Y?.personalGross)}</span>
                 <span className="text-slate-500">{rPersonal.items} sold this period</span>
               </div>
             )}
@@ -240,7 +261,7 @@ export default async function DashboardPage() {
           </div>
           <StatCard
             label="Flip net only"
-            value={allTime ? fmtMoney(t.flip.realizedNet, m, ty?.flip.realizedNet) : fmtMoney(rFlipNet, m)}
+            value={allTime ? fmtMoney(t.flip.realizedNet, m, ty?.flip.realizedNet) : fmtMoney(rFlipNet, m, Y?.flipNet)}
             tone={(allTime ? t.flip.realizedNet : rFlipNet) >= 0 ? "good" : "bad"}
             sub={allTime ? `sold items · all-in ${fmtMoney(t.flip.net, m, ty?.flip.net)} w/ unsold stock` : "profit from items you bought"}
             href={`/breakdown?metric=flip&period=${period}`}
@@ -333,8 +354,8 @@ export default async function DashboardPage() {
                       </Link>
                     </td>
                     <td className="td text-slate-500">{roll.soldCount}/{roll.itemCount} sold</td>
-                    <td className="td">{fmtMoney(roll.cost, m)}</td>
-                    <td className="td"><Net value={roll.net} m={m} /></td>
+                    <td className="td">{fmtMoney(roll.cost, m, yv?.roll(purchase.id).cost)}</td>
+                    <td className="td"><Net value={roll.net} m={m} yen={yv?.roll(purchase.id).net} /></td>
                     <td className="td"><Roi value={roll.roi} /></td>
                   </tr>
                 ))}

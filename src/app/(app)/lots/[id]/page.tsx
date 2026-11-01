@@ -4,8 +4,8 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getFinancials, listLocations, buildYen } from "@/lib/queries";
 import { allocateLot, rollupLot, type FinLot } from "@/lib/finance";
-import { addItemToLot, deletePurchase, linkItemToProduct, updateLot } from "@/lib/actions";
-import { editDistance } from "@/lib/normalize";
+import { addItemToLot, deletePurchase, dismissProductMatch, linkItemToProduct, updateLot } from "@/lib/actions";
+import { editDistance, similarity } from "@/lib/normalize";
 import { getMoney, fmtMoney } from "@/lib/money";
 import ConfirmButton from "@/components/ConfirmButton";
 import { StatCard, Net, Roi, StatusPill } from "@/components/ui";
@@ -66,6 +66,35 @@ export default async function LotDetailPage(props: { params: Promise<{ id: strin
     return null;
   };
 
+  // Name-based suggestion, only for items WITHOUT a barcode (barcoded items rely
+  // on the barcode check above — names mislead for legit variants like Book+CD
+  // vs CD). Strong matches were already merged when the item was added, so this
+  // surfaces the middling ones; categories must agree, and pairs the user
+  // dismissed ("Not the same") stay quiet.
+  const NAME_SUGGEST_MIN = 0.5;
+  const products = new Map<string, { productId: string; name: string; category: string | null; sku: string | null; notSameAs: string[] }>();
+  for (const p of bundle.purchases)
+    for (const i of p.items)
+      if (i.product && !products.has(i.product.id))
+        products.set(i.product.id, { productId: i.product.id, name: i.product.name, category: i.product.category, sku: i.product.sku, notSameAs: i.product.notSameAs });
+  const nameMatchFor = (itemId: string) => {
+    const me = itemProduct.get(itemId);
+    const mine = me?.productId ? products.get(me.productId) : null;
+    if (!mine || mine.sku) return null;
+    let best: { productId: string; name: string; sku: string | null } | null = null;
+    let bestScore = NAME_SUGGEST_MIN;
+    for (const cand of products.values()) {
+      if (cand.productId === mine.productId || mine.notSameAs.includes(cand.productId)) continue;
+      if (mine.category && cand.category && mine.category !== cand.category) continue;
+      const s = similarity(mine.name, cand.name);
+      if (s >= bestScore) {
+        bestScore = s;
+        best = cand;
+      }
+    }
+    return best ? { ...best, productOf: mine.productId } : null;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -89,7 +118,7 @@ export default async function LotDetailPage(props: { params: Promise<{ id: strin
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Lot cost" value={fmtMoney(roll.cost, m, rollY?.cost)} sub={purchase.costJpy ? jpy(purchase.costJpy) : undefined} />
+        <StatCard label="Lot cost" value={fmtMoney(roll.cost, m, rollY?.cost)} sub={purchase.costJpy && !m.single ? jpy(purchase.costJpy) : undefined} />
         <StatCard label="Gross (from its items)" value={fmtMoney(roll.gross, m, rollY?.gross)} sub={`fees ${fmtMoney(roll.fees, m, rollY?.fees)}${roll.expense ? ` · exp ${fmtMoney(roll.expense, m, rollY?.expense)}` : ""}`} />
         <StatCard label="Lot net" value={fmtMoney(roll.net, m, rollY?.net)} tone={roll.net >= 0 ? "good" : "bad"} />
         <StatCard label="Lot ROI" value={roll.roi == null ? "—" : `${(roll.roi * 100).toFixed(1)}%`} tone={(roll.roi ?? 0) >= 0 ? "good" : "bad"} sub={`${roll.soldCount}/${roll.itemCount} sold`} />
@@ -126,7 +155,7 @@ export default async function LotDetailPage(props: { params: Promise<{ id: strin
               <label className="label">Lot cost ($)</label>
               <input name="costUsd" inputMode="decimal" defaultValue={purchase.costUsd || ""} className="input" placeholder="0" />
             </div>
-            <div>
+            <div className={m.single && m.currency === "USD" ? "hidden" : ""}>
               <label className="label">Yen cost (¥)</label>
               <input name="costJpy" inputMode="decimal" defaultValue={purchase.costJpy ?? ""} className="input" placeholder="optional" />
             </div>
@@ -180,17 +209,32 @@ export default async function LotDetailPage(props: { params: Promise<{ id: strin
                           </form>
                         );
                       })()}
+                      {(() => {
+                        const match = nameMatchFor(i.id);
+                        if (!match) return null;
+                        return (
+                          <form action={linkItemToProduct} className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs font-normal text-slate-600">
+                            <input type="hidden" name="itemId" value={i.id} />
+                            <input type="hidden" name="productId" value={match.productId} />
+                            <input type="hidden" name="pairA" value={match.productOf} />
+                            <input type="hidden" name="pairB" value={match.productId} />
+                            Same as <b>{match.name}</b>{match.sku && <> (<span className="font-mono">{match.sku}</span>)</>}? No barcode on this one to check.
+                            <button className="ml-1 rounded bg-white px-1.5 py-0.5 font-medium text-brand-700 ring-1 ring-slate-200 hover:bg-brand-50">Link them</button>
+                            <button formAction={dismissProductMatch} className="ml-1 rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">Not the same</button>
+                          </form>
+                        );
+                      })()}
                     </td>
                     <td className="td" data-label="Status"><StatusPill status={i.status} /></td>
                     <td className="td" data-label="Allocated cost">
-                      {fmtMoney(alloc.get(i.id) ?? 0, m)}
+                      {fmtMoney(alloc.get(i.id) ?? 0, m, yen?.itemFinYen.get(i.id)?.allocatedCost)}
                       {i.costOverrideUsd != null && <span className="ml-1 text-xs text-amber-600">override</span>}
                     </td>
-                    <td className="td" data-label="Sold for">{i.saleLine ? fmtMoney(i.saleLine.salePrice, m) : "—"}</td>
+                    <td className="td" data-label="Sold for">{i.saleLine ? fmtMoney(i.saleLine.salePrice, m, yen?.itemFinYen.get(i.id)?.gross) : "—"}</td>
                     <td className="td text-xs text-slate-500" data-label="Sold on">
                       {soldElsewhere ? `${soldElsewhere.platform.toLowerCase()} · ${shortDate(soldElsewhere.soldAt)}` : "—"}
                     </td>
-                    <td className="td" data-label="Net"><Net value={i.status === "SOLD" || i.status === "LOST" || i.status === "DAMAGED" ? fin?.net ?? null : null} m={m} /></td>
+                    <td className="td" data-label="Net"><Net value={i.status === "SOLD" || i.status === "LOST" || i.status === "DAMAGED" ? fin?.net ?? null : null} m={m} yen={yen?.itemFinYen.get(i.id)?.net} /></td>
                     <td className="td" data-label="ROI"><Roi value={i.status === "SOLD" ? fin?.roi ?? null : null} /></td>
                   </tr>
                 );

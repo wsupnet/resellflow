@@ -6,6 +6,7 @@ import { createSinglePurchase, createLotPurchase } from "@/lib/actions";
 import { CATEGORIES, conditionsFor, tracksCondition } from "@/lib/catalog";
 import ScanButton from "./ScanButton";
 import LocationField from "./LocationField";
+import { useCurrencyPrefs } from "./CurrencyPrefs";
 
 const SOURCES = ["Book Off", "Garage Sale", "Estate Sale", "Thrift Store", "Facebook Marketplace", "Mercari", "Other"];
 
@@ -13,6 +14,7 @@ const SOURCES = ["Book Off", "Garage Sale", "Estate Sale", "Thrift Store", "Face
  *  exact yen amount is stored too (taxJpy). */
 function TaxField({ rate, label = "Tax", defaultCurrency = "JPY" }: { rate: number; label?: string; defaultCurrency?: "USD" | "JPY" }) {
   const [tax, setTax] = useState("");
+  const { single } = useCurrencyPrefs();
   const [cur, setCur] = useState<"USD" | "JPY">(defaultCurrency);
   const n = Number(tax);
   const valid = tax.trim() !== "" && Number.isFinite(n);
@@ -22,20 +24,25 @@ function TaxField({ rate, label = "Tax", defaultCurrency = "JPY" }: { rate: numb
       <label className="label">{label}</label>
       <div className="flex gap-2">
         <input inputMode="decimal" value={tax} onChange={(e) => setTax(e.target.value)} className="input" placeholder="0" />
-        <select value={cur} onChange={(e) => setCur(e.target.value as "USD" | "JPY")} className="input w-20">
-          <option>JPY</option>
-          <option>USD</option>
-        </select>
+        {single ? (
+          <span className="self-center text-sm text-slate-500">{cur === "JPY" ? "¥" : "$"}</span>
+        ) : (
+          <select value={cur} onChange={(e) => setCur(e.target.value as "USD" | "JPY")} className="input w-20">
+            <option>JPY</option>
+            <option>USD</option>
+          </select>
+        )}
       </div>
       <input type="hidden" name="taxUsd" value={usd} />
       <input type="hidden" name="taxJpy" value={valid && cur === "JPY" ? tax : ""} />
-      {cur === "JPY" && valid && <p className="mt-1 text-[10px] text-slate-400">≈ ${usd}</p>}
+      {!single && cur === "JPY" && valid && <p className="mt-1 text-[10px] text-slate-400">≈ ${usd}</p>}
     </div>
   );
 }
 
 /** Shared yen→USD live helper. Fills the USD field when you type a yen amount. */
 function YenUsd({ rate }: { rate: number }) {
+  const { single, primary } = useCurrencyPrefs();
   const [jpy, setJpy] = useState("");
   const [usd, setUsd] = useState("");
   const [usdEdited, setUsdEdited] = useState(false);
@@ -45,10 +52,14 @@ function YenUsd({ rate }: { rate: number }) {
     if (!usdEdited) setUsd(v ? (Number(v) / rate).toFixed(2) : "");
   }
 
+  // One-currency mode shows only the primary currency's box (yen still fills the
+  // hidden USD value, since finance math is in USD).
+  const showYen = !single || primary === "JPY";
+  const showUsd = !single || primary === "USD";
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <div>
-        <label className="label">Yen cost (¥)</label>
+    <div className={`grid gap-3 ${showYen && showUsd ? "grid-cols-2" : "grid-cols-1"}`}>
+      <div className={showYen ? "" : "hidden"}>
+        <label className="label">{single ? "Cost (¥)" : "Yen cost (¥)"}</label>
         <input
           name="costJpy"
           inputMode="decimal"
@@ -58,8 +69,8 @@ function YenUsd({ rate }: { rate: number }) {
           placeholder="e.g. 2970"
         />
       </div>
-      <div>
-        <label className="label">USD cost ($)</label>
+      <div className={showUsd ? "" : "hidden"}>
+        <label className="label">{single ? "Cost ($)" : "USD cost ($)"}</label>
         <input
           name="costUsd"
           inputMode="decimal"
@@ -69,11 +80,11 @@ function YenUsd({ rate }: { rate: number }) {
             setUsd(e.target.value);
             setUsdEdited(true);
           }}
-          placeholder="auto from ¥"
+          placeholder={single ? "e.g. 20" : "auto from ¥"}
         />
       </div>
       <input type="hidden" name="fxRate" value={(1 / rate).toFixed(8)} />
-      <p className="col-span-2 -mt-1 text-xs text-slate-400">
+      <p className={`col-span-2 -mt-1 text-xs text-slate-400 ${single ? "hidden" : ""}`}>
         Today&apos;s rate ≈ ¥{rate.toFixed(1)} / $1 (set in Settings). Edit the USD field if you paid a different effective rate.
       </p>
     </div>

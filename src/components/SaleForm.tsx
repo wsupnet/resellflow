@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { recordSale } from "@/lib/actions";
+import { useCurrencyPrefs } from "./CurrencyPrefs";
 
 /** Parse a money field forgivingly: "$53.99", "¥1,234", " 12.5 " all work.
  *  Strips currency symbols/commas/spaces and keeps digits, dot, minus. */
@@ -31,6 +32,7 @@ export interface FeeSettings {
 
 export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }: { items: SellableItem[]; fees: FeeSettings; rate: number; defaultCurrency?: "USD" | "JPY" }) {
   const [platform, setPlatform] = useState("EBAY");
+  const { single } = useCurrencyPrefs();
   const [currency, setCurrency] = useState<"USD" | "JPY">(defaultCurrency);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [prices, setPrices] = useState<Record<string, string>>({});
@@ -173,8 +175,8 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
         </div>
       </div>
 
-      {/* Currency toggle */}
-      <div>
+      {/* Currency toggle (hidden in one-currency mode) */}
+      <div className={single ? "hidden" : ""}>
         <label className="label">Enter amounts in</label>
         <div className="flex gap-1 rounded-lg bg-slate-100 p-1 text-sm">
           {(["USD", "JPY"] as const).map((c) => (
@@ -354,7 +356,7 @@ export default function SaleForm({ items, fees, rate, defaultCurrency = "USD" }:
           <div className="font-bold text-emerald-600">{fmt(estNet)}</div>
         </div>
       </div>
-      {isYen && (
+      {isYen && !single && (
         <p className="-mt-2 text-center text-xs text-slate-400">
           Saved as USD → gross ${toUsd(total).toFixed(2)} · net ${toUsd(estNet).toFixed(2)}
         </p>

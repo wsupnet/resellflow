@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createLotDraft, addLotItem, addLooseLotItems } from "@/lib/actions";
 import { CATEGORIES, conditionsFor, tracksCondition } from "@/lib/catalog";
 import ScanButton from "./ScanButton";
+import { useCurrencyPrefs } from "./CurrencyPrefs";
 
 const SOURCES = ["Book Off", "Garage Sale", "Estate Sale", "Thrift Store", "Facebook Marketplace", "Mercari", "Other"];
 
@@ -38,6 +39,10 @@ const DRAFT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 export default function LotBuilder({ rate, locations = [], defaultCurrency = "JPY" }: { rate: number; locations?: string[]; defaultCurrency?: "USD" | "JPY" }) {
   // A blank scan card whose per-item cost currency defaults to the view currency.
   const freshCard = { ...EMPTY_CARD, costCur: defaultCurrency };
+  const { single, primary } = useCurrencyPrefs();
+  // One-currency mode shows only the primary currency's cost box.
+  const showYen = !single || primary === "JPY";
+  const showUsd = !single || primary === "USD";
   const router = useRouter();
   const [step, setStep] = useState<Step>("setup");
   const [lotId, setLotId] = useState("");
@@ -332,26 +337,30 @@ export default function LotBuilder({ rate, locations = [], defaultCurrency = "JP
           )}
           {!personal && (
             <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Total yen cost (¥)</label>
+              <div className={`grid gap-3 ${showYen && showUsd ? "grid-cols-2" : "grid-cols-1"}`}>
+                <div className={showYen ? "" : "hidden"}>
+                  <label className="label">{single ? "Total cost (¥)" : "Total yen cost (¥)"}</label>
                   <input inputMode="decimal" value={costJpy} onChange={(e) => onJpy(e.target.value)} className="input" placeholder="e.g. 2970" />
                 </div>
-                <div>
-                  <label className="label">Total USD cost ($)</label>
-                  <input inputMode="decimal" value={costUsd} onChange={(e) => { setCostUsd(e.target.value); setUsdEdited(true); }} className="input" placeholder="auto from ¥" />
+                <div className={showUsd ? "" : "hidden"}>
+                  <label className="label">{single ? "Total cost ($)" : "Total USD cost ($)"}</label>
+                  <input inputMode="decimal" value={costUsd} onChange={(e) => { setCostUsd(e.target.value); setUsdEdited(true); }} className="input" placeholder={single ? "e.g. 20" : "auto from ¥"} />
                 </div>
               </div>
               <div>
                 <label className="label">Tax on lot</label>
                 <div className="flex gap-2">
                   <input inputMode="decimal" value={tax} onChange={(e) => setTax(e.target.value)} className="input" placeholder="optional" />
-                  <select value={taxCur} onChange={(e) => setTaxCur(e.target.value as "USD" | "JPY")} className="input w-20">
-                    <option>JPY</option>
-                    <option>USD</option>
-                  </select>
+                  {single ? (
+                    <span className="self-center text-sm text-slate-500">{taxCur === "JPY" ? "¥" : "$"}</span>
+                  ) : (
+                    <select value={taxCur} onChange={(e) => setTaxCur(e.target.value as "USD" | "JPY")} className="input w-20">
+                      <option>JPY</option>
+                      <option>USD</option>
+                    </select>
+                  )}
                 </div>
-                {taxCur === "JPY" && tax && Number.isFinite(Number(tax)) && (
+                {!single && taxCur === "JPY" && tax && Number.isFinite(Number(tax)) && (
                   <p className="mt-1 text-[10px] text-slate-400">≈ ${(Number(tax) / rate).toFixed(2)}</p>
                 )}
               </div>
@@ -457,12 +466,16 @@ export default function LotBuilder({ rate, locations = [], defaultCurrency = "JP
               <label className="label">This item&apos;s cost <span className="font-normal text-slate-400">(optional)</span></label>
               <div className="flex gap-2">
                 <input inputMode="decimal" value={card.cost} onChange={(e) => setCardField("cost", e.target.value)} className="input" placeholder="blank = split" />
-                <select value={card.costCur} onChange={(e) => setCardField("costCur", e.target.value as "USD" | "JPY")} className="input w-20">
-                  <option>USD</option>
-                  <option>JPY</option>
-                </select>
+                {single ? (
+                  <span className="self-center text-sm text-slate-500">{card.costCur === "JPY" ? "¥" : "$"}</span>
+                ) : (
+                  <select value={card.costCur} onChange={(e) => setCardField("costCur", e.target.value as "USD" | "JPY")} className="input w-20">
+                    <option>USD</option>
+                    <option>JPY</option>
+                  </select>
+                )}
               </div>
-              {card.costCur === "JPY" && costUsdForItem() !== "" && (
+              {!single && card.costCur === "JPY" && costUsdForItem() !== "" && (
                 <p className="mt-1 text-[10px] text-slate-400">≈ ${costUsdForItem()}</p>
               )}
             </div>

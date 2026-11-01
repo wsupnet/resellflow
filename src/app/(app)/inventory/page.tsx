@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { getFinancials, listLocations } from "@/lib/queries";
+import { getFinancials, listLocations, yenView } from "@/lib/queries";
 import { getFxRate } from "@/lib/fx";
 import { sortRows, dirOf } from "@/lib/sort";
 import { variantKey, tracksCondition } from "@/lib/catalog";
@@ -28,6 +28,7 @@ export default async function InventoryPage(
   const searchParams = await props.searchParams;
   const user = await requireUser();
   const [bundle, fx, locations, m] = await Promise.all([getFinancials(user.id), getFxRate(user.id), listLocations(user.id), getMoney(user.id)]);
+  const yv = yenView(bundle, m); // Historical-mode yen, else null
   const locationNames = locations.map((l) => l.name);
 
   // "Sold N× before" counts per variant (product, or product+condition for
@@ -88,7 +89,7 @@ export default async function InventoryPage(
   //    products carry an in-stock breakdown by condition (rolled up, not split). ──
   const productGroups = new Map<
     string,
-    { baseName: string; productId: string | null; sku: string | null; tracks: boolean; inStock: number; listed: number; sold: number; costTiedUp: number; saleSum: number; thumbId: string | null; condInStock: Map<string, number> }
+    { baseName: string; productId: string | null; sku: string | null; tracks: boolean; inStock: number; listed: number; sold: number; costTiedUp: number; saleSum: number; costTiedUpYen: number; saleSumYen: number; thumbId: string | null; condInStock: Map<string, number> }
   >();
   for (const { i } of base) {
     const tracks = tracksCondition(i.product?.category ?? null);
@@ -101,19 +102,21 @@ export default async function InventoryPage(
         productId: i.productId ?? null,
         sku: i.product?.sku ?? null,
         tracks,
-        inStock: 0, listed: 0, sold: 0, costTiedUp: 0, saleSum: 0, thumbId: null,
+        inStock: 0, listed: 0, sold: 0, costTiedUp: 0, saleSum: 0, costTiedUpYen: 0, saleSumYen: 0, thumbId: null,
         condInStock: new Map<string, number>()
       };
     const fin = bundle.itemFin.get(i.id);
     if (i.status === "SOLD") {
       g.sold++;
       g.saleSum += fin?.gross ?? 0;
+      g.saleSumYen += yv?.fin(i.id)?.gross ?? 0;
     } else if (i.status === "LOST" || i.status === "DAMAGED") {
       // Written off — out of inventory: not in stock, cost isn't "tied up" (it's gone).
     } else {
       g.inStock++;
       if (i.status === "LISTED") g.listed++;
       g.costTiedUp += fin?.allocatedCost ?? 0;
+      g.costTiedUpYen += yv?.fin(i.id)?.allocatedCost ?? 0;
       if (tracks) {
         const c = i.condition ?? "Unspecified";
         g.condInStock.set(c, (g.condInStock.get(c) ?? 0) + 1);
@@ -201,6 +204,7 @@ export default async function InventoryPage(
         gross: fin?.gross ?? 0,
         net: fin?.net ?? null,
         roi: fin?.roi ?? null,
+        yen: yv ? { allocatedCost: yv.fin(i.id)?.allocatedCost ?? 0, gross: yv.fin(i.id)?.gross ?? 0, net: yv.fin(i.id)?.net ?? 0 } : undefined,
         timesSold: i.productId ? soldByVariant.get(variantKey(i.productId, i.product?.category, i.condition)) ?? 0 : 0,
         addedAt: i.createdAt.toISOString(),
         // Days sitting unsold, from the purchase date — only meaningful in stock.
@@ -342,8 +346,8 @@ export default async function InventoryPage(
                         </td>
                         <td className="td text-slate-500" data-label="Listed">{g.listed}</td>
                         <td className="td text-slate-500" data-label="Sold">{g.sold}</td>
-                        <td className="td" data-label="Cost tied up">{fmtMoney(g.costTiedUp, m)}</td>
-                        <td className="td text-slate-500" data-label="Avg sale">{g.sold > 0 ? fmtMoney(g.saleSum / g.sold, m) : "—"}</td>
+                        <td className="td" data-label="Cost tied up">{fmtMoney(g.costTiedUp, m, yv ? g.costTiedUpYen : undefined)}</td>
+                        <td className="td text-slate-500" data-label="Avg sale">{g.sold > 0 ? fmtMoney(g.saleSum / g.sold, m, yv ? g.saleSumYen / g.sold : undefined) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>

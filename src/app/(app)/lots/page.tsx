@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { getFinancials, summarizeLots, listLocations } from "@/lib/queries";
+import { getFinancials, summarizeLots, listLocations, yenView } from "@/lib/queries";
 import { sortRows, dirOf } from "@/lib/sort";
 import { Net, Roi } from "@/components/ui";
 import { SortableTh, FilterSelect, Pagination } from "@/components/TableControls";
@@ -21,6 +21,7 @@ export default async function LotsPage(
   const user = await requireUser();
   const [bundle, locationList, m] = await Promise.all([getFinancials(user.id), listLocations(user.id), getMoney(user.id)]);
   let lots = summarizeLots(bundle);
+  const yv = yenView(bundle, m); // Historical-mode yen, else null
   const locName = new Map(locationList.map((l) => [l.id, l.name]));
 
   const sources = [...new Set(bundle.purchases.map((p) => p.source))].sort();
@@ -109,9 +110,9 @@ export default async function LotsPage(
                       : <span className="text-slate-400">{p.source}</span>}
                   </td>
                   <td className="td whitespace-nowrap text-slate-500" data-label="Date"><span title={p.purchasedAtApprox ? "Approximate purchase date" : undefined}>{purchaseDate(p)}</span></td>
-                  <td className="td" data-label="Cost">{fmtMoney(roll.cost, m)}{m.currency !== "JPY" && p.costJpy ? <span className="ml-1 text-xs text-slate-400">¥{p.costJpy}</span> : null}</td>
+                  <td className="td" data-label="Cost">{fmtMoney(roll.cost, m, yv?.roll(p.id).cost)}{m.currency !== "JPY" && !m.single && p.costJpy ? <span className="ml-1 text-xs text-slate-400">¥{p.costJpy}</span> : null}</td>
                   <td className="td text-slate-500" data-label="Sold">{roll.soldCount}/{roll.itemCount}</td>
-                  <td className="td" data-label="Net"><Net value={roll.net} m={m} /></td>
+                  <td className="td" data-label="Net"><Net value={roll.net} m={m} yen={yv?.roll(p.id).net} /></td>
                   <td className="td" data-label="ROI"><Roi value={roll.roi} /></td>
                 </tr>
               ))}

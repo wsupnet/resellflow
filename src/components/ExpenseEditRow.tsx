@@ -23,13 +23,15 @@ export default function ExpenseEditRow({
   attachOptions,
   attachValue,
   attachLabel,
-  m
+  m,
+  yen
 }: {
   expense: LedgerExpense;
   attachOptions: AttachOption[];
   attachValue: string;
   attachLabel: string;
   m: MoneyCtx;
+  yen?: number; // Historical-mode yen for this entry
 }) {
   const isCredit = e.amountUsd < 0;
   const [sign, setSign] = useState<1 | -1>(isCredit ? -1 : 1);
@@ -47,7 +49,7 @@ export default function ExpenseEditRow({
         <div>
           <span className={`font-medium ${isCredit ? "text-emerald-600" : ""}`}>
             {isCredit ? "+" : ""}
-            {fmtMoney(Math.abs(e.amountUsd), m)}
+            {fmtMoney(Math.abs(e.amountUsd), m, yen != null ? Math.abs(yen) : undefined)}
           </span>
           {isCredit && <span className="ml-1.5 pill bg-emerald-100 text-emerald-700">credit</span>}
           <span className="ml-2 pill bg-slate-100 text-slate-600">{e.category}</span>
@@ -95,7 +97,7 @@ export default function ExpenseEditRow({
             <label className="label text-[11px]">Amount ($)</label>
             <input value={usd} onChange={(e2) => setUsd(magnitude(e2.target.value))} inputMode="decimal" className="input py-1.5 text-sm" />
           </div>
-          <div className="w-24">
+          <div className={`w-24 ${m.single && m.currency === "USD" ? "hidden" : ""}`}>
             <label className="label text-[11px]">Amount (¥)</label>
             <input value={jpy} onChange={(e2) => setJpy(magnitude(e2.target.value))} inputMode="decimal" className="input py-1.5 text-sm" placeholder="optional" />
           </div>

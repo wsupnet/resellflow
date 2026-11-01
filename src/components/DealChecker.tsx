@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { setProductComp } from "@/lib/actions";
 import ScanButton from "./ScanButton";
+import { useCurrencyPrefs } from "./CurrencyPrefs";
+import { fmtMoney } from "@/lib/format";
 
 export interface DealProduct {
   key: string; // variant key (product, or product+condition)
@@ -22,6 +24,11 @@ export interface DealProduct {
 }
 
 export default function DealChecker({ products, rate, defaultCurrency = "USD" }: { products: DealProduct[]; rate: number; defaultCurrency?: "USD" | "JPY" }) {
+  const { single } = useCurrencyPrefs();
+  // Your history is stored in USD; show it in the view currency at today's rate
+  // (this page is about buying today, so the live rate is the right one).
+  const money = (n: number) => fmtMoney(n, { currency: defaultCurrency, mode: "live", rate });
+
   // ---- converter ----
   const [conv, setConv] = useState("");
   const [dir, setDir] = useState<"jpy2usd" | "usd2jpy">("jpy2usd");
@@ -83,17 +90,17 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
   let trend: { tone: "up" | "down" | "flat"; text: string } | null = null;
   if (selected && selected.recentAvg != null && selected.avgSalePrice != null && selected.timesSold >= 3) {
     const diff = (selected.recentAvg - selected.avgSalePrice) / selected.avgSalePrice;
-    if (diff >= 0.1) trend = { tone: "up", text: `Selling ABOVE usual lately (recent avg $${selected.recentAvg.toFixed(2)} vs all-time $${selected.avgSalePrice.toFixed(2)}). Hotter than normal.` };
-    else if (diff <= -0.1) trend = { tone: "down", text: `Selling BELOW usual lately (recent avg $${selected.recentAvg.toFixed(2)} vs all-time $${selected.avgSalePrice.toFixed(2)}). Cooling off — be choosier.` };
-    else trend = { tone: "flat", text: `Selling about usual (recent avg $${selected.recentAvg.toFixed(2)}).` };
+    if (diff >= 0.1) trend = { tone: "up", text: `Selling ABOVE usual lately (recent avg ${money(selected.recentAvg)} vs all-time ${money(selected.avgSalePrice)}). Hotter than normal.` };
+    else if (diff <= -0.1) trend = { tone: "down", text: `Selling BELOW usual lately (recent avg ${money(selected.recentAvg)} vs all-time ${money(selected.avgSalePrice)}). Cooling off — be choosier.` };
+    else trend = { tone: "flat", text: `Selling about usual (recent avg ${money(selected.recentAvg)}).` };
   }
 
   const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
 
   return (
     <div className="space-y-6">
-      {/* Converter */}
-      <div className="card">
+      {/* Converter (not needed when only one currency is in use) */}
+      <div className={`card ${single ? "hidden" : ""}`}>
         <h2 className="mb-3 text-lg font-semibold">Currency converter</h2>
         <p className="mb-3 text-xs text-slate-400">Today&apos;s rate ≈ ¥{rate.toFixed(1)} / $1 (set in Settings)</p>
         <div className="flex items-end gap-2">
@@ -173,23 +180,23 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
               </div>
               <div className="rounded-lg bg-slate-50 p-2">
                 <div className="text-xs text-slate-500">Avg buy</div>
-                <div className="font-bold">{selected.avgBuyPrice != null ? `$${selected.avgBuyPrice.toFixed(2)}` : "—"}</div>
+                <div className="font-bold">{selected.avgBuyPrice != null ? money(selected.avgBuyPrice) : "—"}</div>
                 {selected.avgBuyPrice != null && (
                   <div className="text-[10px] text-slate-400">≈ ¥{Math.round(selected.avgBuyPrice * rate).toLocaleString()}</div>
                 )}
               </div>
               <div className="rounded-lg bg-slate-50 p-2">
                 <div className="text-xs text-slate-500">Avg sale</div>
-                <div className="font-bold">{selected.avgSalePrice != null ? `$${selected.avgSalePrice.toFixed(2)}` : "—"}</div>
+                <div className="font-bold">{selected.avgSalePrice != null ? money(selected.avgSalePrice) : "—"}</div>
               </div>
               <div className="rounded-lg bg-slate-50 p-2">
                 <div className="text-xs text-slate-500">Last sold</div>
-                <div className="font-bold">{selected.lastSalePrice != null ? `$${selected.lastSalePrice.toFixed(2)}` : "—"}</div>
+                <div className="font-bold">{selected.lastSalePrice != null ? money(selected.lastSalePrice) : "—"}</div>
                 {selected.lastSaleDate && <div className="text-[10px] text-slate-400">{fmtDate(selected.lastSaleDate)}</div>}
               </div>
               <div className="rounded-lg bg-slate-50 p-2">
                 <div className="text-xs text-slate-500">Avg net</div>
-                <div className="font-bold">{selected.avgNet != null ? `$${selected.avgNet.toFixed(2)}` : "—"}</div>
+                <div className="font-bold">{selected.avgNet != null ? money(selected.avgNet) : "—"}</div>
               </div>
               <div className="rounded-lg bg-slate-50 p-2">
                 <div className="text-xs text-slate-500">Days to sell</div>
@@ -213,16 +220,20 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
                 <label className="label">Asking price</label>
                 <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" className="input" />
               </div>
-              <select value={priceCur} onChange={(e) => setPriceCur(e.target.value as "USD" | "JPY")} className="input mb-0 w-24">
-                <option>USD</option>
-                <option>JPY</option>
-              </select>
+              {single ? (
+                <span className="mb-2.5 text-sm text-slate-500">{priceCur === "JPY" ? "¥" : "$"}</span>
+              ) : (
+                <select value={priceCur} onChange={(e) => setPriceCur(e.target.value as "USD" | "JPY")} className="input mb-0 w-24">
+                  <option>USD</option>
+                  <option>JPY</option>
+                </select>
+              )}
             </div>
 
             {buyUsd != null && (
               <p className="text-sm text-slate-500">
-                That&apos;s <b>${buyUsd.toFixed(2)}</b>
-                {benchmark != null && benchmark > 0 && <> vs. {benchmarkSource} of <b>${benchmark.toFixed(2)}</b></>}
+                That&apos;s <b>{money(buyUsd)}</b>
+                {benchmark != null && benchmark > 0 && <> vs. {benchmarkSource} of <b>{money(benchmark)}</b></>}
               </p>
             )}
 
@@ -246,17 +257,29 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
             )}
 
             {/* set/update comp */}
-            <form action={setProductComp} className="flex items-end gap-2 border-t border-slate-100 pt-3">
-              <input type="hidden" name="id" value={selected.productId} />
-              <div className="grow">
-                <label className="label">Set manual comp (sold price, $)</label>
-                <input name="compPrice" inputMode="decimal" defaultValue={selected.compPrice ?? ""} className="input" placeholder="from eBay sold / 130point" />
-              </div>
-              <button className="btn-ghost">Save comp</button>
-            </form>
+            <CompForm key={selected.key} product={selected} currency={defaultCurrency} rate={rate} />
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+/** Manual comp, typed in the view currency and stored in USD like every other amount. */
+function CompForm({ product, currency, rate }: { product: DealProduct; currency: "USD" | "JPY"; rate: number }) {
+  const initial = product.compPrice == null ? "" : currency === "JPY" ? String(Math.round(product.compPrice * rate)) : String(product.compPrice);
+  const [comp, setComp] = useState(initial);
+  const n = Number(comp);
+  const usd = comp.trim() === "" || !Number.isFinite(n) ? "" : currency === "JPY" ? (n / rate).toFixed(2) : String(n);
+  return (
+    <form action={setProductComp} className="flex items-end gap-2 border-t border-slate-100 pt-3">
+      <input type="hidden" name="id" value={product.productId} />
+      <input type="hidden" name="compPrice" value={usd} />
+      <div className="grow">
+        <label className="label">Set manual comp (sold price, {currency === "JPY" ? "¥" : "$"})</label>
+        <input inputMode="decimal" value={comp} onChange={(e) => setComp(e.target.value)} className="input" placeholder="from eBay sold / 130point" />
+      </div>
+      <button className="btn-ghost">Save comp</button>
+    </form>
   );
 }

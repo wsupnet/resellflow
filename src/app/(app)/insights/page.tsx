@@ -7,7 +7,7 @@ import { Roi } from "@/components/ui";
 import SubNav from "@/components/SubNav";
 import { Pagination } from "@/components/TableControls";
 import { resolvePer, paginate } from "@/lib/paginate";
-import { fmtMoney, moneyUnit } from "@/lib/format";
+import { fmtMoney, moneyUnit, toView } from "@/lib/format";
 import { getMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +42,8 @@ export default async function InsightsPage(
   const user = await requireUser();
   // "individual" drops bundle sales (whose per-item price is a cost-share estimate).
   const individualOnly = searchParams.sales === "individual";
-  const [all, m] = await Promise.all([getVariantStats(user.id, { individualOnly }), getMoney(user.id)]);
+  const m = await getMoney(user.id);
+  const all = await getVariantStats(user.id, { individualOnly, m });
   // Insights is about what sells — only variants with at least one sale.
   const stats = all.filter((s) => s.timesSold > 0);
 
@@ -65,8 +66,8 @@ export default async function InsightsPage(
     name: s.name.length > 22 ? s.name.slice(0, 21) + "…" : s.name,
     fullName: s.name, // hover tooltip shows the untruncated name
     value:
-      // Money lenses convert at the live rate (rate = 1 for USD); the rest are %/counts/days.
-      sort === "profit" ? s.totalNet * m.rate
+      // Money lenses follow the view currency; the rest are %/counts/days.
+      sort === "profit" ? toView(s.totalNet, m, s.totalNetYen)
       : sort === "roi" ? (s.avgRoi ?? 0) * 100
       : sort === "freq" ? s.timesSold
       : sort === "speed" ? (s.avgDaysToSell ?? 0)
@@ -163,8 +164,8 @@ export default async function InsightsPage(
                         </span>
                       )}
                     </td>
-                    <td className="td" data-label="Total net">{fmtMoney(s.totalNet, m)}</td>
-                    <td className="td" data-label="Avg net / sale">{fmtMoney(s.avgNet, m)}</td>
+                    <td className="td" data-label="Total net">{fmtMoney(s.totalNet, m, s.totalNetYen)}</td>
+                    <td className="td" data-label="Avg net / sale">{fmtMoney(s.avgNet, m, s.totalNetYen != null && s.timesSold ? s.totalNetYen / s.timesSold : undefined)}</td>
                     <td className="td" data-label="Avg ROI">
                       <Roi value={s.avgRoi} />
                       {s.avgRoi != null && s.timesSold < ROI_MIN_SALES && (

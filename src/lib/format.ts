@@ -20,6 +20,7 @@ export interface MoneyCtx {
   currency: "USD" | "JPY";
   mode: "live" | "historical";
   rate: number; // live JPY per USD (1 for USD); Live mode + historical fallback
+  single?: boolean; // one-currency mode: hide secondary-currency hints
 }
 
 /**
@@ -29,6 +30,15 @@ export interface MoneyCtx {
  */
 export function moneyUnit(m: MoneyCtx): { symbol: string; decimals: number } {
   return m.currency === "JPY" ? { symbol: "¥", decimals: 0 } : { symbol: "$", decimals: 2 };
+}
+
+/**
+ * A canonical USD amount as a plain number in the display currency (for charts).
+ * Historical mode uses the pre-computed yen when given, like fmtMoney.
+ */
+export function toView(usdAmount: number, m: MoneyCtx, yen?: number): number {
+  if (m.currency !== "JPY") return usdAmount;
+  return m.mode === "historical" && yen != null ? yen : usdAmount * m.rate;
 }
 
 /**

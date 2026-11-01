@@ -5,7 +5,7 @@ import { HBarChart } from "@/components/Charts";
 import SubNav from "@/components/SubNav";
 import { SectionTitle } from "@/components/ui";
 import InfoTip from "@/components/InfoTip";
-import { fmtMoney, moneyUnit } from "@/lib/format";
+import { fmtMoney, moneyUnit, toView } from "@/lib/format";
 import { getMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,8 @@ const METRICS: { key: Metric; label: string }[] = [
 export default async function TrendsPage(props: { searchParams: Promise<{ metric?: string }> }) {
   const searchParams = await props.searchParams;
   const user = await requireUser();
-  const [data, m] = await Promise.all([getSeasonality(user.id), getMoney(user.id)]);
+  const m = await getMoney(user.id);
+  const data = await getSeasonality(user.id, m);
 
   const metric = (METRICS.some((x) => x.key === searchParams.metric) ? searchParams.metric : "units") as Metric;
   const isMoney = metric !== "units";
@@ -29,7 +30,7 @@ export default async function TrendsPage(props: { searchParams: Promise<{ metric
   // Bars go on a Jan→Dec axis; money metrics convert at the live rate.
   const chartData = data.byMonth.map((mo) => ({
     name: mo.label,
-    value: metric === "units" ? mo.units : (metric === "gross" ? mo.gross : mo.net) * m.rate
+    value: metric === "units" ? mo.units : metric === "gross" ? toView(mo.gross, m, mo.grossYen) : toView(mo.net, m, mo.netYen)
   }));
   const chartFmt = isMoney
     ? { symbol: u.symbol, suffix: "", decimals: u.decimals }
@@ -123,8 +124,8 @@ export default async function TrendsPage(props: { searchParams: Promise<{ metric
                       <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">{c.peakMonth}</span>
                     </td>
                     <td className="td" data-label="Items sold">{c.units}</td>
-                    <td className="td" data-label="Gross">{fmtMoney(c.gross, m)}</td>
-                    <td className="td" data-label="Net">{fmtMoney(c.net, m)}</td>
+                    <td className="td" data-label="Gross">{fmtMoney(c.gross, m, c.grossYen)}</td>
+                    <td className="td" data-label="Net">{fmtMoney(c.net, m, c.netYen)}</td>
                   </tr>
                 ))}
               </tbody>

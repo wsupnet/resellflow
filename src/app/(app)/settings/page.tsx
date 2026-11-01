@@ -59,12 +59,23 @@ export default async function SettingsPage() {
             <input name="defaultShipping" inputMode="decimal" defaultValue={settings.defaultShipping.toFixed(2)} className="input" />
           </div>
           <div>
-            <label className="label">Default display currency</label>
+            <label className="label">Primary currency</label>
             <select name="homeCurrency" defaultValue={settings.homeCurrency} className="input">
               <option value="USD">USD ($)</option>
               <option value="JPY">Yen (¥)</option>
             </select>
-            <p className="mt-1 text-xs text-slate-400">Which currency amounts show in by default. Flip it anytime with the $/¥ toggle in the top bar.</p>
+            <p className="mt-1 text-xs text-slate-400">What amounts show in and what entry forms start in.</p>
+          </div>
+          <div>
+            <label className="label">Second currency</label>
+            <select name="secondCurrency" defaultValue={settings.singleCurrency ? "none" : "on"} className="input">
+              <option value="on">On — the other of $ / ¥</option>
+              <option value="none">None — use only my primary currency</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-400">
+              On adds the $/¥ toggle in the top bar and a currency picker on entry forms. None hides both, and everything uses
+              the primary currency. Amounts already entered in the other currency are kept and converted.
+            </p>
           </div>
           <div>
             <label className="label">Yen conversion</label>

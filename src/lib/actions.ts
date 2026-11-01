@@ -603,6 +603,22 @@ export async function linkItemToProduct(fd: FormData) {
   revalidateAll();
 }
 
+/** "Not the same": silence the lot page's name-match suggestion for this pair of products. */
+export async function dismissProductMatch(fd: FormData) {
+  const user = await requireUser();
+  // Own field names: this button shares a form with the link action's productId.
+  const productId = str(fd.get("pairA"));
+  const otherId = str(fd.get("pairB"));
+  const pair = await prisma.product.findMany({ where: { id: { in: [productId, otherId] }, userId: user.id } });
+  if (pair.length !== 2) throw new Error("Not found");
+  for (const p of pair) {
+    const other = p.id === productId ? otherId : productId;
+    if (!p.notSameAs.includes(other)) await prisma.product.update({ where: { id: p.id }, data: { notSameAs: { push: other } } });
+  }
+  await setFlash("Got it — won't suggest that match again");
+  revalidateAll();
+}
+
 export async function deleteItem(fd: FormData) {
   const user = await requireUser();
   const id = str(fd.get("id"));
@@ -1229,7 +1245,7 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
         const s = d.settings;
         await tx.settings.upsert({
           where: { userId: uid },
-          create: { userId: uid, ebayFeePct: s.ebayFeePct, ebayFlatFee: s.ebayFlatFee, mercariFeePct: s.mercariFeePct, adFeePct: s.adFeePct, defaultShipping: s.defaultShipping, upcLookup: !!s.upcLookup, homeCurrency: s.homeCurrency === "JPY" ? "JPY" : "USD", fxMode: s.fxMode === "historical" ? "historical" : "live", fxLive: !!s.fxLive, fxManualRate: typeof s.fxManualRate === "number" && s.fxManualRate > 0 ? s.fxManualRate : 150, theme: ["light", "cream", "dark", "system"].includes(s.theme) ? s.theme : "light" },
+          create: { userId: uid, ebayFeePct: s.ebayFeePct, ebayFlatFee: s.ebayFlatFee, mercariFeePct: s.mercariFeePct, adFeePct: s.adFeePct, defaultShipping: s.defaultShipping, upcLookup: !!s.upcLookup, homeCurrency: s.homeCurrency === "JPY" ? "JPY" : "USD", singleCurrency: !!s.singleCurrency, fxMode: s.fxMode === "historical" ? "historical" : "live", fxLive: !!s.fxLive, fxManualRate: typeof s.fxManualRate === "number" && s.fxManualRate > 0 ? s.fxManualRate : 150, theme: ["light", "cream", "dark", "system"].includes(s.theme) ? s.theme : "light" },
           update: {}
         });
       }
@@ -1389,6 +1405,7 @@ export async function updateSettings(fd: FormData) {
   };
   const upcLookup = fd.get("upcLookup") != null;
   const homeCurrency = str(fd.get("homeCurrency")) === "JPY" ? "JPY" : "USD";
+  const singleCurrency = str(fd.get("secondCurrency")) === "none";
   const fxMode = str(fd.get("fxMode")) === "historical" ? "historical" : "live";
   const fxLive = fd.get("fxLive") != null;
   const manualRate = num(fd.get("fxManualRate"));
@@ -1406,6 +1423,7 @@ export async function updateSettings(fd: FormData) {
       defaultShipping: num(fd.get("defaultShipping")) ?? undefined,
       upcLookup,
       homeCurrency,
+      singleCurrency,
       fxMode,
       fxLive,
       fxManualRate,
@@ -1420,6 +1438,7 @@ export async function updateSettings(fd: FormData) {
       defaultShipping: num(fd.get("defaultShipping")) ?? 0,
       upcLookup,
       homeCurrency,
+      singleCurrency,
       fxMode,
       fxLive,
       fxManualRate,

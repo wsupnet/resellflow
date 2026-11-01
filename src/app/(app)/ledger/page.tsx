@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
-import { getFinancials } from "@/lib/queries";
+import { getFinancials, yenView } from "@/lib/queries";
 import { getFxRate } from "@/lib/fx";
 import ExpenseForm, { type AttachOption } from "@/components/ExpenseForm";
 import ExpenseEditRow from "@/components/ExpenseEditRow";
@@ -67,6 +67,15 @@ export default async function LedgerPage(
   const expensesTotal = bundle.expenses.filter((e) => e.amountUsd > 0).reduce((a, e) => a + e.amountUsd, 0);
   const creditsTotal = bundle.expenses.filter((e) => e.amountUsd < 0).reduce((a, e) => a - e.amountUsd, 0);
   const total = expensesTotal - creditsTotal;
+  // Historical mode: the same totals in yen at locked rates (exact yen where entered).
+  const yv = yenView(bundle, m);
+  const yenOf = (e: (typeof bundle.expenses)[number]) => yv?.expenseYenById.get(e.id) ?? 0;
+  const ty = yv
+    ? {
+        expenses: bundle.expenses.filter((e) => e.amountUsd > 0).reduce((a, e) => a + yenOf(e), 0),
+        credits: bundle.expenses.filter((e) => e.amountUsd < 0).reduce((a, e) => a - yenOf(e), 0)
+      }
+    : null;
   const attached = bundle.expenses.filter((e) => e.purchaseId || e.itemId || e.saleId).length;
 
   return (
@@ -80,9 +89,9 @@ export default async function LedgerPage(
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Expenses" value={fmtMoney(expensesTotal, m)} tone="bad" help="All business costs logged here that aren't item purchases — fees, supplies, commissions. These reduce your profit." />
-        <StatCard label="Credits" value={fmtMoney(creditsTotal, m)} tone={creditsTotal > 0 ? "good" : "default"} sub="refunds, rebates, etc." help="Money that came back to you — refunds, rebates, reimbursements. These add to your profit." />
-        <StatCard label="Net effect on profit" value={fmtMoney(-total, m)} tone={-total >= 0 ? "good" : "bad"} sub="expenses − credits" help="What this whole ledger does to your bottom line: credits minus expenses. Negative means the ledger costs you money overall (normal)." />
+        <StatCard label="Expenses" value={fmtMoney(expensesTotal, m, ty?.expenses)} tone="bad" help="All business costs logged here that aren't item purchases — fees, supplies, commissions. These reduce your profit." />
+        <StatCard label="Credits" value={fmtMoney(creditsTotal, m, ty?.credits)} tone={creditsTotal > 0 ? "good" : "default"} sub="refunds, rebates, etc." help="Money that came back to you — refunds, rebates, reimbursements. These add to your profit." />
+        <StatCard label="Net effect on profit" value={fmtMoney(-total, m, ty ? ty.credits - ty.expenses : undefined)} tone={-total >= 0 ? "good" : "bad"} sub="expenses − credits" help="What this whole ledger does to your bottom line: credits minus expenses. Negative means the ledger costs you money overall (normal)." />
         <StatCard label="Entries" value={String(bundle.expenses.length)} sub={`${attached} attached`} help="Total ledger entries. 'Attached' ones are tied to a specific lot, item, or sale and roll into its profit; the rest count as general overhead." />
       </div>
 
@@ -113,6 +122,7 @@ export default async function LedgerPage(
                   attachValue={valueOf(e)}
                   attachLabel={attachLabel(e)}
                   m={m}
+                  yen={yv ? yenOf(e) : undefined}
                 />
               ))}
             </div>

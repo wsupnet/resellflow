@@ -101,6 +101,7 @@ export default function ItemTable({ rows, rate, locations = [], m }: { rows: Ite
       {merging && (
         <MergeDialog
           products={mergeProductsList}
+          m={m}
           onClose={() => setMerging(false)}
           onMerged={() => setSelected(new Set())}
         />

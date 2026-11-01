@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { getFinancials, listLocations } from "@/lib/queries";
+import { getFinancials, listLocations, yenView } from "@/lib/queries";
 import { createLocation, renameLocation, deleteLocation } from "@/lib/actions";
 import ConfirmButton from "@/components/ConfirmButton";
 import { SectionTitle, Net, Roi } from "@/components/ui";
@@ -14,7 +14,8 @@ export default async function LocationsPage() {
   const [locations, bundle, m] = await Promise.all([listLocations(user.id), getFinancials(user.id), getMoney(user.id)]);
 
   // Per-location all-time stats from items sourced there (realized on sold items).
-  const agg = new Map<string, { items: number; sold: number; gross: number; net: number; spend: number }>();
+  const yv = yenView(bundle, m); // Historical-mode yen, else null
+  const agg = new Map<string, { items: number; sold: number; gross: number; net: number; spend: number; grossYen: number; netYen: number }>();
   let untaggedItems = 0;
   for (const p of bundle.purchases) {
     if (!p.locationId) {
@@ -22,7 +23,7 @@ export default async function LocationsPage() {
       if (!p.isPersonal) untaggedItems += p.items.length;
       continue;
     }
-    const a = agg.get(p.locationId) ?? { items: 0, sold: 0, gross: 0, net: 0, spend: 0 };
+    const a = agg.get(p.locationId) ?? { items: 0, sold: 0, gross: 0, net: 0, spend: 0, grossYen: 0, netYen: 0 };
     for (const i of p.items) {
       a.items++;
       const f = bundle.itemFin.get(i.id);
@@ -31,6 +32,8 @@ export default async function LocationsPage() {
         a.gross += f.gross;
         a.net += f.net;
         a.spend += f.allocatedCost + f.feeShare + f.expense;
+        a.grossYen += yv?.fin(i.id)?.gross ?? 0;
+        a.netYen += yv?.fin(i.id)?.net ?? 0;
       }
     }
     agg.set(p.locationId, a);
@@ -38,7 +41,7 @@ export default async function LocationsPage() {
 
   const rows = locations
     .map((l) => {
-      const a = agg.get(l.id) ?? { items: 0, sold: 0, gross: 0, net: 0, spend: 0 };
+      const a = agg.get(l.id) ?? { items: 0, sold: 0, gross: 0, net: 0, spend: 0, grossYen: 0, netYen: 0 };
       return { ...l, ...a, roi: a.spend > 0 ? a.net / a.spend : null, avgNet: a.sold ? a.net / a.sold : null };
     })
     .sort((x, y) => y.net - x.net);
@@ -101,10 +104,10 @@ export default async function LocationsPage() {
                   </td>
                   <td className="td text-right text-slate-500" data-label="Items">{l.items}</td>
                   <td className="td text-right text-slate-500" data-label="Sold">{l.sold}</td>
-                  <td className="td text-right" data-label="Gross">{fmtMoney(l.gross, m)}</td>
-                  <td className="td text-right" data-label="Net"><Net value={l.sold ? l.net : null} m={m} /></td>
+                  <td className="td text-right" data-label="Gross">{fmtMoney(l.gross, m, yv ? l.grossYen : undefined)}</td>
+                  <td className="td text-right" data-label="Net"><Net value={l.sold ? l.net : null} m={m} yen={yv ? l.netYen : undefined} /></td>
                   <td className="td text-right" data-label="ROI"><Roi value={l.roi} /></td>
-                  <td className="td text-right" data-label="Avg net / sale">{fmtMoney(l.avgNet, m)}</td>
+                  <td className="td text-right" data-label="Avg net / sale">{fmtMoney(l.avgNet, m, yv && l.sold ? l.netYen / l.sold : undefined)}</td>
                   <td className="td cell-action text-right" data-label="">
                     <details>
                       <summary className="cursor-pointer text-xs text-brand-600">Edit</summary>

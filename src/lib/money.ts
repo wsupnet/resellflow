@@ -15,19 +15,32 @@ export { fmtMoney } from "./format";
  * we attach the current live rate. USD amounts are the canonical stored value;
  * this is a display-time conversion at today's rate.
  */
+export interface CurrencyPrefs {
+  primary: "USD" | "JPY";
+  single: boolean; // one-currency mode: no toggle, no pickers
+}
+
+export async function getCurrencyPrefs(userId: string): Promise<CurrencyPrefs> {
+  const s = await prisma.settings.findUnique({ where: { userId }, select: { homeCurrency: true, singleCurrency: true } });
+  return { primary: s?.homeCurrency === "JPY" ? "JPY" : "USD", single: !!s?.singleCurrency };
+}
+
+/** The view-currency cookie wins, unless the user turned the second currency off. */
+async function resolveView(prefs: CurrencyPrefs): Promise<"USD" | "JPY"> {
+  if (prefs.single) return prefs.primary;
+  const cookie = (await cookies()).get("viewCurrency")?.value;
+  return cookie === "JPY" || cookie === "USD" ? cookie : prefs.primary;
+}
+
 /** Just the chosen display currency (cookie → default), no rate fetch. */
 export async function getViewCurrency(userId: string): Promise<"USD" | "JPY"> {
-  const cookie = (await cookies()).get("viewCurrency")?.value;
-  if (cookie === "JPY" || cookie === "USD") return cookie;
-  const s = await prisma.settings.findUnique({ where: { userId }, select: { homeCurrency: true } });
-  return s?.homeCurrency === "JPY" ? "JPY" : "USD";
+  return resolveView(await getCurrencyPrefs(userId));
 }
 
 export async function getMoney(userId: string): Promise<MoneyCtx> {
-  const cookie = (await cookies()).get("viewCurrency")?.value;
-  const s = await prisma.settings.findUnique({ where: { userId }, select: { homeCurrency: true, fxMode: true } });
-  const currency = cookie === "JPY" || cookie === "USD" ? cookie : s?.homeCurrency === "JPY" ? "JPY" : "USD";
+  const s = await prisma.settings.findUnique({ where: { userId }, select: { homeCurrency: true, singleCurrency: true, fxMode: true } });
+  const currency = await resolveView({ primary: s?.homeCurrency === "JPY" ? "JPY" : "USD", single: !!s?.singleCurrency });
   const mode = s?.fxMode === "historical" ? "historical" : "live";
   const rate = currency === "JPY" ? (await getFxRate(userId)).rate : 1;
-  return { currency, mode, rate };
+  return { currency, mode, rate, single: !!s?.singleCurrency };
 }

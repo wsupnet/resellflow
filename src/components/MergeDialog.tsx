@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { mergeProducts } from "@/lib/actions";
+import { fmtMoney, type MoneyCtx } from "@/lib/format";
 
 export interface MergeProduct {
   productId: string;
@@ -20,10 +21,12 @@ export interface MergeProduct {
  */
 export default function MergeDialog({
   products,
+  m,
   onClose,
   onMerged
 }: {
   products: MergeProduct[];
+  m: MoneyCtx;
   onClose: () => void;
   onMerged: () => void;
 }) {
@@ -102,7 +105,7 @@ export default function MergeDialog({
                 name="comp"
                 value={comp}
                 onChange={setComp}
-                options={[...comps.map((c) => ({ value: String(c), label: `$${c.toFixed(2)}` })), { value: "", label: "None" }]}
+                options={[...comps.map((c) => ({ value: String(c), label: fmtMoney(c, m) })), { value: "", label: "None" }]}
               />
             </Field>
           )}

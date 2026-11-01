@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { getFinancials } from "@/lib/queries";
+import { getFinancials, yenView } from "@/lib/queries";
 import { looksEvenlySplit } from "@/lib/bundles";
 import { convertToBundle, markPricedIndividually } from "@/lib/actions";
 import { fmtMoney, shortDate } from "@/lib/format";
@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function BundleReviewPage() {
   const user = await requireUser();
   const [bundle, m] = await Promise.all([getFinancials(user.id), getMoney(user.id)]);
+  const yv = yenView(bundle, m); // Historical-mode yen, else null
 
   const pending = bundle.sales.filter((s) => s.lines.length > 1 && s.bundleTotal == null && !s.bundleReviewed);
   const even = pending.filter((s) => looksEvenlySplit(s.lines.map((l) => l.salePrice)));
@@ -23,6 +24,7 @@ export default async function BundleReviewPage() {
 
   const SaleCard = ({ s, pick }: { s: (typeof pending)[number]; pick: boolean }) => {
     const total = s.lines.reduce((a, l) => a + l.salePrice, 0);
+    const totalY = yv ? s.lines.reduce((a, l) => a + (yv.fin(l.itemId)?.gross ?? 0), 0) : undefined;
     return (
       <label className="block rounded-lg border border-slate-100 p-3 hover:bg-slate-50/60">
         <div className="flex items-start gap-3">
@@ -32,15 +34,15 @@ export default async function BundleReviewPage() {
               <span>
                 {shortDate(s.soldAt)} · {s.platform.toLowerCase()} · {s.lines.length} items
               </span>
-              <span className="font-medium text-slate-700">{fmtMoney(total, m)}</span>
+              <span className="font-medium text-slate-700">{fmtMoney(total, m, totalY)}</span>
             </div>
             <ul className="mt-1 text-sm text-slate-600">
               {s.lines.map((l) => (
                 <li key={l.id} className="flex justify-between gap-3">
                   <span className="truncate">{l.item.title}</span>
                   <span className="whitespace-nowrap text-right">
-                    {fmtMoney(l.salePrice, m)}
-                    <span className="ml-2 text-xs text-slate-400">cost {fmtMoney(bundle.itemFin.get(l.itemId)?.allocatedCost ?? 0, m)}</span>
+                    {fmtMoney(l.salePrice, m, yv?.fin(l.itemId)?.gross)}
+                    <span className="ml-2 text-xs text-slate-400">cost {fmtMoney(bundle.itemFin.get(l.itemId)?.allocatedCost ?? 0, m, yv?.fin(l.itemId)?.allocatedCost)}</span>
                   </span>
                 </li>
               ))}

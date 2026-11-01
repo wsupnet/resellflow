@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getFinancials } from "@/lib/queries";
+import { getFinancials, yenView } from "@/lib/queries";
 import { tracksCondition } from "@/lib/catalog";
 import { getFxRate } from "@/lib/fx";
 import Link from "next/link";
@@ -26,6 +26,7 @@ export default async function SalesPage(
   const searchParams = await props.searchParams;
   const user = await requireUser();
   const [bundle, fx, m] = await Promise.all([getFinancials(user.id), getFxRate(user.id), getMoney(user.id)]);
+  const yv = yenView(bundle, m); // Historical-mode yen, else null
 
   let settings = await prisma.settings.findUnique({ where: { userId: user.id } });
   if (!settings) settings = await prisma.settings.create({ data: { userId: user.id } });
@@ -72,7 +73,11 @@ export default async function SalesPage(
       // ROI for this sale = net / money in (acquisition cost + fees + attributed expenses).
       const basis = cogs + fees + expense;
       const roi = basis > 0 ? net / basis : null;
-      return { sale: s, gross, cogs, fees, expense, net, roi };
+      // Same sums in yen at locked rates (Historical mode only).
+      const finsY = yv ? s.lines.map((l) => yv.fin(l.itemId)) : null;
+      const sumY = (k: "gross" | "allocatedCost" | "feeShare" | "expense" | "net") => finsY?.reduce((a, f) => a + (f?.[k] ?? 0), 0);
+      const yen = finsY ? { gross: sumY("gross"), cogs: sumY("allocatedCost"), fees: sumY("feeShare"), expense: sumY("expense"), net: sumY("net") } : undefined;
+      return { sale: s, gross, cogs, fees, expense, net, roi, yen };
     });
   const sort = searchParams.sort ?? "date";
   const dir = dirOf(searchParams.dir ?? "desc");
@@ -130,7 +135,7 @@ export default async function SalesPage(
             <p className="py-8 text-center text-sm text-slate-500">No sales match.</p>
           ) : (
             <div className="space-y-2">
-              {pg.rows.map(({ sale: s, gross, cogs, fees, expense, net, roi }) => {
+              {pg.rows.map(({ sale: s, gross, cogs, fees, expense, net, roi, yen }) => {
                 return (
                   /* Collapsed = one scannable line (date · platform · what sold · net/ROI);
                      everything else lives behind the expand. */
@@ -149,7 +154,7 @@ export default async function SalesPage(
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className="text-sm">Net <Net value={net} m={m} /></div>
+                        <div className="text-sm">Net <Net value={net} m={m} yen={yen?.net} /></div>
                         {roi != null && <div className="text-xs text-slate-400">ROI <Roi value={roi} /></div>}
                       </div>
                     </summary>
@@ -166,6 +171,7 @@ export default async function SalesPage(
                     <ul className="mt-1 text-sm text-slate-600">
                       {s.lines.map((l) => {
                         const cost = bundle.itemFin.get(l.itemId)?.allocatedCost ?? 0;
+                        const ly = yv?.fin(l.itemId);
                         return (
                           <li key={l.id} className="flex justify-between gap-3 py-0.5">
                             <span>
@@ -175,13 +181,13 @@ export default async function SalesPage(
                               )}
                             </span>
                             <span className="whitespace-nowrap text-right">
-                              {fmtMoney(l.salePrice, m)}
+                              {fmtMoney(l.salePrice, m, ly?.gross)}
                               {/* Exact yen as entered, when the sale was recorded in ¥. */}
-                              {l.priceJpy != null && <span className="ml-1 text-xs text-slate-400">¥{l.priceJpy.toLocaleString()}</span>}
+                              {l.priceJpy != null && !m.single && <span className="ml-1 text-xs text-slate-400">¥{l.priceJpy.toLocaleString()}</span>}
                               {/* A bundle's derived share vs. a price typed over it. */}
                               {s.bundleTotal != null && <span className="block text-xs text-purple-700">{l.allocated ? "share of bundle" : "price set"}</span>}
                               {/* Acquisition cost (a lot's cost split across its items) so the COGS below is traceable. */}
-                              <span className="block text-xs text-slate-400">cost {fmtMoney(cost, m)}</span>
+                              <span className="block text-xs text-slate-400">cost {fmtMoney(cost, m, ly?.allocatedCost)}</span>
                             </span>
                           </li>
                         );
@@ -191,18 +197,18 @@ export default async function SalesPage(
                     <div className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-sm">
                       <div className="flex justify-between text-slate-500">
                         <span>Gross</span>
-                        <span>{fmtMoney(gross, m)}</span>
+                        <span>{fmtMoney(gross, m, yen?.gross)}</span>
                       </div>
                       <div className="flex justify-between text-slate-500">
                         <span>− Cost of goods</span>
-                        <span className="text-red-600">−{fmtMoney(cogs, m)}</span>
+                        <span className="text-red-600">−{fmtMoney(cogs, m, yen?.cogs)}</span>
                       </div>
                       <div className="flex justify-between text-slate-500">
                         <span>− Fees</span>
-                        <span className="text-red-600">−{fmtMoney(fees, m)}</span>
+                        <span className="text-red-600">−{fmtMoney(fees, m, yen?.fees)}</span>
                       </div>
                       {expense !== 0 && (() => {
-                        const d = fmtDeduction(expense, m);
+                        const d = fmtDeduction(expense, m, yen?.expense);
                         return (
                           <div className="flex justify-between text-slate-500">
                             <span>{d.isCredit ? "+ Credit" : "− Expenses"}</span>
@@ -214,7 +220,7 @@ export default async function SalesPage(
                         <span className="font-medium">Net</span>
                         <span className="flex items-center gap-2">
                           {roi != null && <span className="text-xs text-slate-400">ROI <Roi value={roi} /></span>}
-                          <Net value={net} m={m} />
+                          <Net value={net} m={m} yen={yen?.net} />
                         </span>
                       </div>
                     </div>
