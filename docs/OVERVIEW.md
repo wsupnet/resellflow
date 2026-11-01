@@ -86,6 +86,8 @@ sales add up to it, so there are no mystery totals.
 - Every purchase, whether a lot, a single item, or a **personal belonging** (something you already owned)
 - A lot's cost (plus tax) is **split across its items automatically**, weighted by what each one
   sells for or is expected to sell for. You can pin any item's cost manually.
+- A lot's page flags **likely duplicates** to link: a barcode that's one digit off (a mis-scan), or, for
+  items with no barcode, a similar name in the same category. **Not the same** dismisses one for good.
 - See how each lot performed overall, even when its items sold separately or in bundles with other lots
 
 ### 💰 Sales
@@ -121,6 +123,7 @@ sales add up to it, so there are no mystery totals.
 - Search or **scan a barcode with your phone camera**
 - See your own history for that product: times sold, average sale price, and whether it's been
   selling above or below normal lately
+- Prices show in whichever currency you're viewing
 - Enter the asking price (in **dollars or yen**) for a verdict from *"Buy it 🔥"* down to *"Rethink it"*,
   based on your real sale history or a comp price you paste in
 
@@ -158,7 +161,7 @@ sales add up to it, so there are no mystery totals.
 |---|---|
 | 🧮 **Honest profit math** | Lot costs, bundle sale prices and fees are split fairly across items; profit always rolls back to the lot it came from |
 | 🎒 **Personal items tracked separately** | Things you already owned count toward profit but don't inflate your ROI |
-| 💴 **Dollars and yen** | Built for buying in Japan: store the yen price and the exchange rate you actually paid |
+| 💴 **Dollars and yen** | Built for buying in Japan: store the yen price and the exchange rate you actually paid. Or switch the second currency off and use just one |
 | 📷 **Barcode scanning** | Scan with your phone camera to add items or check deals; optional name lookup from book, music and retail databases |
 | 📱 **Works on your phone** | Installable as a phone app (PWA) for use while sourcing |
 | 🔒 **Private by default** | Nothing is sent to outside services unless you turn it on; runs on your own machine |

@@ -21,17 +21,26 @@ Facebook. Built to solve the things a spreadsheet can't:
   real return instead of an inflated ROI. A one-time review screen converts past
   multi-item sales.
 - **Real P&L.** Gross, fees (eBay / Mercari / ad / shipping), net, and ROI — at
-  the item, lot, and portfolio level, with monthly charts.
+  the item, lot, and portfolio level, with monthly charts, a Reports tab, and
+  CSV export.
+- **Dollars and yen.** Pick a primary currency ($ or ¥) and optionally the other
+  as a second one, with a $/¥ toggle and a currency picker on entry forms. Or
+  turn the second currency off and work in one currency only. Yen can use
+  today's rate or the rate locked in on each purchase and sale, on every screen.
 - **Good-deal checker.** Yen↔USD converter (your own rate, or fetched if you opt
   in) plus a verdict on whether you're
-  over/underpaying, based on your own sale history or a comp you paste in.
+  over/underpaying, based on your own sale history or a comp you paste in. It
+  shows prices in whichever currency you're viewing.
 - **Buy-more insights.** Ranks what you should source more of by a blended score,
   with toggles to view by total profit, ROI, or how often it sells. Bundle sales
   are tagged, an **Individual only** filter leaves them out, and ROI needs 3+ sales
   before it can top the rankings.
 - **Barcode / SKU grouping + camera scanning.** Scan a barcode with your phone
   camera (or type it) to tag any item; items sharing a code are treated as one
-  product so the "times sold" count is accurate even when names differ. Scan on
+  product so the "times sold" count is accurate even when names differ. A lot's
+  page flags likely duplicates to link: a barcode one digit off another product's
+  (a mis-scan), or, for items with no barcode, a similar name in the same
+  category. **Not the same** silences a suggestion for good. Scan on
   the add-item form, the item editor, or the Deal Checker (scan in-store to pull
   up your history). Optional online name lookup for unknown barcodes (Settings,
   off by default). **Camera needs HTTPS or localhost** (browser requirement).
@@ -225,17 +234,16 @@ the templates there for the exact columns), or restore a full ResellFlow backup
 - **Insights ROI guard:** a product needs **3 or more sales** before its ROI ranks
   in the ROI view, and ROI counts fully in the blended score only from 3 sales on —
   so one lucky sale can't make an item look like a top seller.
-- All reporting is in **USD**. Each purchase also stores the yen amount and the
-  locked exchange rate you paid; today's rate (your manual rate, or fetched if
-  you opt in) is only used for the shopping calculator and yen display.
+- The math runs in **USD**. Anything entered in yen also stores the exact yen
+  amount and the exchange rate locked in that day. Yen display uses either
+  today's rate (your manual rate, or fetched if you opt in) or, in **Historical**
+  mode, each purchase's and sale's locked rate, with the exact typed yen used
+  wherever it was stored. Historical mode covers every card, table, chart and
+  the report CSV.
 - Fee percentages are **editable** in Settings. Past sales keep the fees they were
   recorded with, so changing rates never rewrites history.
 
 ## Roadmap
-
-- **Reports tab.** Planned: generated financial reports — P&L (profit & loss),
-  net operating income, by-period / by-platform / by-source summaries, and
-  export to PDF/CSV. Builds on the existing finance engine and ledger.
 
 - **Real-time comps.** eBay/Mercari sold-price comps — deferred (eBay sold data
   is restricted/paid, Mercari has no public API). Currently uses your own sale

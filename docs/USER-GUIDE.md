@@ -96,7 +96,8 @@ For anything you bought on its own.
    - **Category** and **Source** (Book Off, thrift store, estate sale, and so on)
    - **Purchased** date and **Location** (optional)
    - **Cost**: enter **Yen cost (¥)** and the USD cost fills in from today's rate (set in Settings), or enter
-     **USD cost ($)** directly. Add **Tax** if any.
+     **USD cost ($)** directly. Add **Tax** if any. With the second currency turned off in Settings, there's
+     just one **Cost** box in your primary currency.
    - **Est. resale value ($)** (optional, but it helps cost splitting and reports before the item sells)
    - **Notes**
 4. Click **Add item**.
@@ -142,6 +143,16 @@ Open it from **Inventory → Lots** to edit its name, cost, tax or location, add
 the lot is doing overall. If you know one item's exact cost, set **This item's cost** (or the
 **Cost override** on the item). The rest of the lot's cost is split across the other items.
 
+**Possible duplicates.** The lot's page flags items that might already exist in your catalog under
+another product, so their sales history isn't split in two:
+
+- **Barcode one digit off** (yellow note): the barcode is one digit different from another product's,
+  which usually means a mis-scan. **Link them** moves the item onto that product.
+- **Same as …?** (gray note): only for items **with no barcode**. The name is close to a product you
+  already have in the **same category**. Choose **Link them** if it's the same thing, or **Not the same**
+  if it's a different version (say, Book+CD vs CD alone). ResellFlow remembers your answer and won't ask
+  about that pair again.
+
 ---
 
 ## 5. Manage your inventory
@@ -166,7 +177,8 @@ still counts against your profit, which keeps the numbers honest.
 
 1. Go to **Sales** (or **+ Record sale** on the dashboard).
 2. Choose the **Platform** (eBay, Mercari, Facebook or Other) and the **Sold date**.
-3. Choose whether you're entering amounts in USD or yen.
+3. Choose whether you're entering amounts in USD or yen. (With the second currency turned off in
+   Settings, this choice is hidden and everything is in your primary currency.)
 4. Under **Items in this sale**, tick the item(s) that sold. Use **Search items…** to find them.
    - **One item:** enter its price.
    - **A bundle:** price each item, or switch to **One total (lot)** and enter the single price
@@ -254,6 +266,9 @@ Standing in a store wondering whether something is worth buying? Open **Deal Che
    If you've handled it before, you'll see your history: times sold, average sale price, and
    whether it's been selling above or below its usual price lately.
 2. **Enter the asking price** in dollars or yen. The built-in **Currency converter** uses today's rate.
+   Your history (average sale price, recent average, and so on) shows in whichever currency you're
+   viewing, converted at today's rate. With only one currency in use, the converter and the $/¥ picker
+   are hidden.
 3. **Read the verdict**, which compares the asking price to what it usually sells for:
 
    | Verdict | You'd pay… |
@@ -264,7 +279,7 @@ Standing in a store wondering whether something is worth buying? Open **Deal Che
    | **Rethink it** | More than it sells for: you'd likely lose money |
 
 **Never sold one before?** There's no history to compare against yet. Look up recent sold prices
-(eBay sold listings, 130point, and so on), then use **Set manual comp (sold price, $) → Save comp** on
+(eBay sold listings, 130point, and so on), then use **Set manual comp (sold price) → Save comp** on
 that product. The Deal Checker uses your comp from then on.
 
 **Scanned something new?** If no item has that barcode yet, add it in **Inventory** so its history
