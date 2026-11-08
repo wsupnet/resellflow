@@ -1,0 +1,10 @@
+# Keep Unix line endings in the repo and in checkouts on every OS, so a Windows
+# clone builds the same image as a Mac or NAS one (shell lines in the Dockerfile
+# and compose file break with CRLF).
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.mp4 binary
+*.ico binary

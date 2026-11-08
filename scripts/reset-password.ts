@@ -12,9 +12,11 @@
  */
 import readline from "readline";
 import { PrismaClient } from "@prisma/client";
+import { ensureDatabaseUrl } from "../src/lib/dburl";
 import { hashPassword, passwordProblem } from "../src/lib/password";
 import { normalizeEmail } from "../src/lib/email";
 
+ensureDatabaseUrl();
 const prisma = new PrismaClient();
 
 /** Prompt on the terminal without echoing what's typed. */

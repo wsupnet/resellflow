@@ -2,7 +2,10 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { passwordProblem } from "../src/lib/password";
 import { normalizeEmail } from "../src/lib/email";
+import { ensureDatabaseUrl } from "../src/lib/dburl";
+import { dataDirLabel, emptyDatabaseWarnings, markHasData } from "../src/lib/datadir";
 
+ensureDatabaseUrl();
 const prisma = new PrismaClient();
 
 // Example values that have shipped in this repo's docs/.env.example. They're
@@ -27,15 +30,38 @@ async function lowercaseStoredEmails() {
   }
 }
 
-async function main() {
-  await lowercaseStoredEmails();
-
-  const email = normalizeEmail(process.env.ADMIN_EMAIL ?? "");
-  const password = process.env.ADMIN_PASSWORD;
-  if (!email || !password) {
-    console.log("  ADMIN_EMAIL/ADMIN_PASSWORD not set — skipping admin seed.");
+/**
+ * Says where the data lives on every boot, and — while there are no accounts yet —
+ * whether this looks like a genuine first run or like data that went missing.
+ */
+async function reportDataFolder() {
+  const dir = dataDirLabel();
+  console.log(`  Data folder: ${dir}/reselling-app`);
+  if ((await prisma.user.count()) > 0) {
+    markHasData();
     return;
   }
+  const warnings = emptyDatabaseWarnings();
+  if (warnings.length) {
+    const bar = "  " + "!".repeat(72);
+    console.warn(`\n${bar}\n  ! DATA EXPECTED BUT NOT FOUND\n${bar}`);
+    for (const w of warnings) console.warn(`  ! ${w}\n`);
+    console.warn(bar + "\n");
+  } else {
+    console.log(
+      `  First run: started with a new, empty database in ${dir}/reselling-app/postgres.\n` +
+        `  Open the app in your browser to create the admin account.\n` +
+        `  (Expected existing data? Stop now and check DATA_DIR.)`
+    );
+  }
+}
+
+/** Optional: create the first admin from ADMIN_EMAIL / ADMIN_PASSWORD (for setups
+ *  without a browser handy). Normally the first-run page in the browser does it. */
+async function seedAdminFromEnv() {
+  const email = normalizeEmail(process.env.ADMIN_EMAIL ?? "");
+  const password = process.env.ADMIN_PASSWORD;
+  if (!email || !password) return;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -44,16 +70,16 @@ async function main() {
   }
 
   // Refuse to create the first admin with the example password or one that breaks
-  // the app's own rule — the boot stops here (like the AUTH_SECRET check) so a
-  // copied .env.example can't ship a publicly known admin login.
+  // the app's own rule, so a copied example can't ship a publicly known admin
+  // login. The boot carries on (no crash loop); the admin can be created in the
+  // browser instead.
   const problem = PLACEHOLDER_PASSWORDS.has(password) ? "it is the example placeholder from .env.example" : passwordProblem(password);
   if (problem) {
     console.error(
-      `\n  ✗ ADMIN_PASSWORD can't be used (${problem}).\n` +
-        `    Set ADMIN_PASSWORD in .env to your own password (at least 12 characters),\n` +
-        `    then run: docker compose up -d\n`
+      `\n  ✗ ADMIN_PASSWORD can't be used (${problem}), so no admin was created from .env.\n` +
+        `    Create the admin account in the browser instead, or set ADMIN_PASSWORD to your\n` +
+        `    own password (at least 12 characters) and run: docker compose up -d\n`
     );
-    process.exitCode = 1;
     return;
   }
 
@@ -68,6 +94,12 @@ async function main() {
     }
   });
   console.log(`  Created admin user ${user.email}`);
+}
+
+async function main() {
+  await lowercaseStoredEmails();
+  await seedAdminFromEnv();
+  await reportDataFolder();
 }
 
 main()

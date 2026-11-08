@@ -17,6 +17,9 @@ const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
+  // Next's file tracing pulls the TypeScript compiler into the standalone server,
+  // which never uses it at runtime. Keeps ~9 MB of dev tooling out of the image.
+  outputFileTracingExcludes: { "*": ["node_modules/typescript/**"] },
   experimental: {
     serverActions: {
       bodySizeLimit: "30mb"

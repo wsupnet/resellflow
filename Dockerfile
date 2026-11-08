@@ -15,7 +15,7 @@
 FROM node:22-slim AS deps
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 CHECKPOINT_DISABLE=1
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 
@@ -25,10 +25,15 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 CHECKPOINT_DISABLE=1
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+# Generate the Prisma client before copying the rest of the code, so this step is
+# cached unless the schema itself changes.
+COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npx prisma generate
-RUN npm run build
-RUN npm run build:scripts
+COPY . .
+# `next build` directly: `npm run build` would run prisma generate a second time.
+# Then drop sharp's WebAssembly fallback, which is never used on Linux (~9 MB).
+RUN npx next build && npm run build:scripts \
+ && rm -rf node_modules/@img/sharp-wasm32 .next/standalone/node_modules/@img/sharp-wasm32
 
 # ───────────────────────── runner ─────────────────────────
 FROM node:22-slim AS runner
@@ -64,13 +69,15 @@ ENV PORT=3000 HOSTNAME=0.0.0.0
 # its own files — some NAS Docker setups block non-root users from /app.
 
 # Startup is inlined (no external entrypoint script) so it can't be blocked by a
-# NAS's file-permission sandboxing: check (or generate) AUTH_SECRET, wait for the
-# DB (stopping with the real error on bad credentials), sync the schema, seed the
-# admin (refusing a placeholder/weak first-admin password), then start the server.
-# Any of those failing stops the container with its message in the logs.
+# NAS's file-permission sandboxing: check (or generate) AUTH_SECRET, build the
+# database URL (from the generated db password unless .env sets one), wait for the
+# DB (stopping with the real error on bad credentials), sync the schema, then the
+# boot checks (optional admin from .env, data folder / first-run messages), then
+# start the server. Any of those failing stops the container with its message in
+# the logs. With no accounts yet, the first visitor gets the admin setup page.
 #
 # The schema sync never deletes data: additive changes (new tables / columns with
 # defaults) apply automatically, but if an update would drop data, `db push`
 # refuses, the error is shown (not hidden behind "waiting for db"), and the app
 # stops until someone reviews it — see README "Updates that change the database".
-CMD ["sh", "-c", "AUTH_SECRET=\"$(node dist/scripts/ensure-secret.js)\" || exit 1; export AUTH_SECRET; node dist/scripts/wait-for-db.js || exit 1; node_modules/.bin/prisma db push --skip-generate || { echo; echo '  ✗ Database update stopped - nothing was changed (see the error above).'; echo '    If it warns about data loss: back up first, then see the README section'; echo '    \"Updates that change the database\".'; exit 1; }; node dist/prisma/seed.js || exit 1; exec node server.js"]
+CMD ["sh", "-c", "AUTH_SECRET=\"$(node dist/scripts/ensure-secret.js)\" || exit 1; export AUTH_SECRET; DATABASE_URL=\"$(node dist/scripts/db-url.js)\" || exit 1; export DATABASE_URL; node dist/scripts/wait-for-db.js || exit 1; node_modules/.bin/prisma db push --skip-generate || { echo; echo '  ✗ Database update stopped - nothing was changed (see the error above).'; echo '    If it warns about data loss: back up first, then see the README section'; echo '    \"Updates that change the database\".'; exit 1; }; node dist/prisma/seed.js || exit 1; exec node server.js"]

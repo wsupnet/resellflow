@@ -28,10 +28,12 @@ Setting it up? See the [README](../README.md#quick-start) or [Hosting on a NAS](
 
 1. Open the app in your browser, for example `http://localhost:3939` or `http://<NAS-IP>:3939`
    (opening it by IP from another device needs `APP_BIND=0.0.0.0` in `.env`).
-2. Sign in with the `ADMIN_EMAIL` and `ADMIN_PASSWORD` from your `.env`. This account is
-   created automatically the first time the app starts.
-3. **Change your password right away:** **Settings → Account**. Enter your current password,
-   then the new one twice (at least 12 characters). Changing it signs out any other devices.
+2. **On a new install** there are no accounts yet, so the app shows a setup page. Enter your
+   email and a password (at least 12 characters) to create the admin account. Only the admin
+   can invite other people. (If whoever set up the server put `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+   in `.env`, the admin already exists: sign in with those instead.)
+3. To change your password later: **Settings → Account**. Enter your current password, then
+   the new one twice. Changing it signs out any other devices.
 
 After 10 wrong passwords for the same account, sign-in pauses for 15 minutes. That slows down
 anyone guessing; just wait it out if it was you. Browsers and phones you've signed in on before

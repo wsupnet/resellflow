@@ -6,11 +6,9 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy",
     "prisma:push": "prisma db push",
-    "build:scripts": "esbuild prisma/seed.ts scripts/reset-password.ts scripts/ensure-secret.ts scripts/wait-for-db.ts --outbase=. --bundle --platform=node --format=cjs --outdir=dist --external:@prisma/client --external:.prisma --external:bcryptjs",
+    "build:scripts": "esbuild prisma/seed.ts scripts/reset-password.ts scripts/ensure-secret.ts scripts/wait-for-db.ts scripts/db-url.ts --outbase=. --bundle --platform=node --format=cjs --outdir=dist --external:@prisma/client --external:.prisma --external:bcryptjs",
     "db:seed": "node dist/prisma/seed.js",
     "reset-password": "node dist/scripts/reset-password.js"
   },

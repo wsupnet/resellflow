@@ -1,18 +1,43 @@
 name: reselling-app
 
+# Starts with no .env at all: `docker compose up -d --build`, then open
+# http://localhost:3939 and create the admin account. Everything is kept in one
+# folder, DATA_DIR (default ./data next to this file). Every setting is optional;
+# see .env.example.
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-resell}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Optional. Leave unset and a random password is generated on first start and
+      # kept in DATA_DIR/reselling-app/secrets/db_password (the app reads it there).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ${POSTGRES_DB:-resellflow}
       # Store data in a subdirectory so Postgres init doesn't trip over the
       # volume mount point's permissions/contents (common on NAS filesystems).
       PGDATA: /var/lib/postgresql/data/pgdata
+    # Generate the database password on first start if .env doesn't set one, then
+    # hand over to the image's normal entrypoint. Postgres only uses it when it
+    # creates a new database; after that the stored password stays.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        f=/secrets/db_password
+        if [ -z "$$POSTGRES_PASSWORD" ]; then
+          if [ ! -s "$$f" ]; then
+            (umask 077; tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 40 > "$$f.tmp") && mv "$$f.tmp" "$$f" || exit 1
+            echo "Generated a database password in the secrets folder."
+          fi
+          POSTGRES_PASSWORD="$$(cat "$$f")"
+          export POSTGRES_PASSWORD
+        fi
+        exec docker-entrypoint.sh postgres
     volumes:
-      - ${APPDATA:?APPDATA is not set}/reselling-app/postgres:/var/lib/postgresql/data
+      - ${DATA_DIR:-./data}/reselling-app/postgres:/var/lib/postgresql/data
+      - ${DATA_DIR:-./data}/reselling-app/secrets:/secrets
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resell} -d ${POSTGRES_DB:-resellflow}"]
       interval: 10s
@@ -23,9 +48,7 @@ services:
       - no-new-privileges:true
 
   app:
-    # Builds on the host from source. Needs a .env (copy .env.example) — the
-    # stack refuses to start until the required secrets below are set.
-    #   docker compose up -d --build
+    # Builds on the host from source:  docker compose up -d --build
     build: .
     image: resellflow:local
     restart: unless-stopped
@@ -33,12 +56,23 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      # The app builds its database connection from these plus the generated
+      # password. Set DATABASE_URL only for an external database (or if an older
+      # .env already has it).
+      POSTGRES_USER: ${POSTGRES_USER:-resell}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-resellflow}
+      DATABASE_URL: ${DATABASE_URL:-}
       # Optional: leave unset and a random one is generated on first boot and kept
-      # in $APPDATA/reselling-app/secrets. Placeholder/short values are refused.
+      # in DATA_DIR/reselling-app/secrets. Placeholder/short values are refused.
       AUTH_SECRET: ${AUTH_SECRET:-}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      # Optional: create the first admin from .env instead of in the browser.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Only shown in messages, so the logs can say where the data is.
+      DATA_DIR_HOST: ${DATA_DIR:-./data}
+      # Older versions used APPDATA for the data folder; read only to warn about it.
+      LEGACY_APPDATA: ${APPDATA:-}
       # Only used by accounts that turn on "Fetch today's rate". Set empty to disable
       # fetching server-wide (unset = default provider).
       FX_API_URL: ${FX_API_URL-https://open.er-api.com/v6/latest/USD}
@@ -66,8 +100,8 @@ services:
       - /root
       - /app/.next/cache
     volumes:
-      - ${APPDATA:?APPDATA is not set}/reselling-app/uploads:/app/uploads
-      - ${APPDATA:?APPDATA is not set}/reselling-app/secrets:/app/secrets
+      - ${DATA_DIR:-./data}/reselling-app/uploads:/app/uploads
+      - ${DATA_DIR:-./data}/reselling-app/secrets:/app/secrets
 
   # Optional: Tailscale HTTPS for the phone camera. Trusted cert, works anywhere.
   # Starts only with the "ts" profile:
@@ -92,7 +126,7 @@ services:
     cap_add:
       - net_admin
     volumes:
-      - ${APPDATA:?APPDATA is not set}/reselling-app/tailscale:/var/lib/tailscale
+      - ${DATA_DIR:-./data}/reselling-app/tailscale:/var/lib/tailscale
       - ./deploy/serve.json:/config/serve.json:ro
     restart: unless-stopped
 

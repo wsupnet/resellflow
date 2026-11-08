@@ -9,6 +9,7 @@
  * forever. Gives up after about two minutes either way.
  */
 import { PrismaClient } from "@prisma/client";
+import { ensureDatabaseUrl } from "../src/lib/dburl";
 
 const ATTEMPTS = 60;
 const DELAY_MS = 2000;
@@ -27,6 +28,7 @@ function fail(lines: string[]): never {
 }
 
 async function main() {
+  ensureDatabaseUrl();
   let last = "";
   for (let i = 1; i <= ATTEMPTS; i++) {
     const prisma = new PrismaClient();
@@ -44,9 +46,9 @@ async function main() {
         fail([
           FATAL[code],
           `(${code}: ${last})`,
-          "DATABASE_URL must use the same user/password/db as POSTGRES_* in .env. Note that",
-          "Postgres keeps the password it was first created with — changing POSTGRES_PASSWORD",
-          "later doesn't change it. See README: keep DATABASE_URL and POSTGRES_* in sync."
+          "Postgres keeps the password it was first created with. If .env sets POSTGRES_PASSWORD or",
+          "DATABASE_URL, it must match that original password; if neither is set, the generated",
+          "secrets/db_password must be the one the database was created with."
         ]);
       }
       console.log("waiting for db...");

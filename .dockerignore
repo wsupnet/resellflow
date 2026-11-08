@@ -13,3 +13,15 @@ dev-data
 demo-data
 docs
 demo-out
+# Not needed to build the image. Excluding them also means editing docs, compose
+# or local tool settings doesn't force a rebuild of the code layers.
+.env.*
+.claude
+*.md
+scripts/demo
+deploy
+docker-compose*.yml
+Dockerfile
+.dockerignore
+.gitattributes
+.gitignore

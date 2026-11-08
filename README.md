@@ -71,7 +71,7 @@ Facebook. Built to solve the things a spreadsheet can't:
 | [Demo video](docs/demo/resellflow-demo.mp4) | A 90-second walkthrough of the main features (demo data) |
 | [User guide](docs/USER-GUIDE.md) | Step by step: first login, adding items and lots, sales, expenses, the dashboard, Deal Checker, backups |
 | [Quick start](#quick-start) | Run it locally with Docker in a few minutes |
-| [Hosting on a NAS](docs/DEPLOY-NAS.md) | Synology / QNAP / UGREEN / Unraid setup, HTTPS for the phone camera, backups, updates |
+| [Hosting on a NAS](docs/DEPLOY-NAS.md) | NAS setup (used on UGREEN; others that run Docker Compose should work), HTTPS for the phone camera, backups, updates |
 | [Security & privacy](#security--privacy) | What leaves your server (nothing, by default), who can reach the app, and how it's protected |
 | [Passwords & lockout](docs/DEPLOY-NAS.md#9-passwords--lockout) | Changing your password, and resetting it from the server if you're locked out |
 | [Inviting family & friends](#inviting-family--friends) | Invite-only accounts with private data per user |
@@ -80,21 +80,25 @@ Facebook. Built to solve the things a spreadsheet can't:
 
 ## Quick start
 
-You only need **Docker** installed.
+You only need **Docker** (Docker Desktop on Windows/Mac, or Docker with the
+Compose plugin on Linux or a NAS). No `.env` file is needed. From the project
+folder:
 
 ```bash
-cp .env.example .env
-# edit .env: set a strong POSTGRES_PASSWORD and your ADMIN_EMAIL / ADMIN_PASSWORD
-# (12+ characters; the stack won't start while ADMIN_PASSWORD is blank or an
-# example value). AUTH_SECRET is generated for you on first boot.
-# APPDATA=./dev-data is already set for local use
-
 docker compose up -d --build
 ```
 
-Open <http://localhost:3939> (or whatever `APP_PORT` is) and sign in with the
-`ADMIN_EMAIL` / `ADMIN_PASSWORD` you set. The database schema and the admin
-account are created automatically on first boot.
+The first build takes a few minutes. Then open <http://localhost:3939> and
+create the admin account. With no accounts yet, the first visit goes straight to
+that setup page. The database password and session secret are generated for you
+on first start.
+
+Create the admin right after the first start: until an account exists, anyone
+who can open the page could claim it. By default only this computer can open it
+(see the next paragraph).
+
+To change a setting (port, data folder, network access), copy `.env.example` to
+`.env` and uncomment the line you need. Every setting is optional.
 
 By default the app only answers on the computer running it, so nobody else on
 your Wi-Fi can reach the login page. To open it from other devices by IP (a NAS,
@@ -106,24 +110,35 @@ by default) and how it's locked down.
 
 ### Where the data lives
 
-Data is kept in plain folders outside the containers, under `APPDATA` from `.env`
-(required — compose refuses to start without it):
+Everything the app stores is in **one folder**, `DATA_DIR`. It defaults to
+`./data` next to `docker-compose.yml` (git-ignored). Nothing is stored inside the
+image or the containers, so rebuilding or deleting them never touches your data.
+**Back up this folder.**
 
-| Folder | Mounted at | Contents |
-|---|---|---|
-| `$APPDATA/reselling-app/postgres` | `db:/var/lib/postgresql/data` | Postgres database (in `pgdata/`) |
-| `$APPDATA/reselling-app/uploads` | `app:/app/uploads` | Item photos |
-| `$APPDATA/reselling-app/secrets` | `app:/app/secrets` | Generated `AUTH_SECRET` (keep private) |
-| `$APPDATA/reselling-app/tailscale` | `tailscale:/var/lib/tailscale` | Tailscale state (`ts` profile only) |
+| Folder | Contents |
+|---|---|
+| `DATA_DIR/reselling-app/postgres` | The database (in `pgdata/`) |
+| `DATA_DIR/reselling-app/uploads` | Item photos |
+| `DATA_DIR/reselling-app/secrets` | Generated database password and session secret (keep private) |
+| `DATA_DIR/reselling-app/tailscale` | Tailscale state (`ts` profile only) |
 
-Locally `APPDATA=./dev-data` (git-ignored). On the NAS it's
-`/volume1/docker/appdata` — see [Hosting on a NAS](docs/DEPLOY-NAS.md).
+To keep it somewhere else, set `DATA_DIR` in `.env` (on a NAS, e.g.
+`DATA_DIR=/volume1/docker/appdata`; see [Hosting on a NAS](docs/DEPLOY-NAS.md)).
 
-### Important: keep `DATABASE_URL` and `POSTGRES_*` in sync
+Every start prints the data folder in `docker compose logs app`. A first start
+says it created a new, empty database. If the database is empty but the folder
+held data before (saved photos, or a note the app leaves once it has accounts),
+the log shows a **DATA EXPECTED BUT NOT FOUND** warning, and so does the setup
+page. If you see it, stop and check `DATA_DIR` before creating an account.
 
-`DATABASE_URL` (used by the app) must contain the same user/password/db as the
-`POSTGRES_*` values (used by the database). The default `.env.example` already
-lines them up — just change the password in both places.
+**Upgrading from a version that used `APPDATA`?** The folder setting was renamed
+because Windows always defines its own `APPDATA`, which silently overrode
+`.env`. Rename the line in your `.env` from `APPDATA=…` to `DATA_DIR=…` (same
+value) **before** running `docker compose up` with this version. Otherwise the app
+starts on a new, empty `./data` folder. Your old data isn't touched, and the app
+warns about the leftover `APPDATA` line. Keep any `POSTGRES_PASSWORD`,
+`DATABASE_URL` and `ADMIN_*` lines you already have: an existing database keeps
+the password it was created with.
 
 ### Updates that change the database
 
@@ -140,10 +155,17 @@ refuses, leaves the database untouched, and stops with this in
 Nothing is lost at that point. To go ahead once you've read what it would drop:
 
 ```bash
-docker compose exec -T db pg_dump -U resell -d resellflow > resellflow-before-update.sql  # back up first
-docker compose run --rm app node_modules/.bin/prisma db push --skip-generate --accept-data-loss  # apply it
-docker compose up -d                                                                      # start normally
+docker compose exec db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/before-update.sql'
+docker compose cp db:/tmp/before-update.sql ./resellflow-before-update.sql
+docker compose run --rm app sh -c 'DATABASE_URL="$(node dist/scripts/db-url.js)" node_modules/.bin/prisma db push --skip-generate --accept-data-loss'
+docker compose up -d
 ```
+
+The first two lines back up the database, the third applies the update, and the
+last starts the app normally. They work the same in macOS/Linux shells and in
+Windows PowerShell. The backup is written inside the container and then copied
+out, because a PowerShell `>` redirect can save the file in an encoding the
+restore can't read.
 
 Or roll back the code (`git checkout <previous version>`) and rebuild.
 
@@ -174,16 +196,17 @@ forwarding a port on your router — the app isn't meant to face the open intern
 
 **How it's protected:**
 
-- Login sessions are signed with `AUTH_SECRET` (generated per install; example
-  placeholders and short secrets are refused). *Settings → Account → Sign out of
+- The database password and the session-signing `AUTH_SECRET` are generated
+  randomly per install (example placeholders and short secrets are refused). The
+  database port is never published outside Docker's private network. *Settings → Account → Sign out of
   all devices* revokes every session for an account.
 - 10 wrong passwords pauses sign-in for that account for 15 minutes, however the
   email is spelled. Browsers that have signed in to the account before keep a
   separate budget, so someone hammering your account can't lock you out of your
   own devices. Behind your own reverse proxy, set `TRUST_PROXY=1` to also limit
   failures per client IP (see `.env.example` for when that's safe). Passwords are
-  at least 12 characters and stored as bcrypt hashes; the first admin can't be
-  created with an example password.
+  at least 12 characters and stored as bcrypt hashes. The no-invite setup page
+  only works while the install has no accounts at all.
 - Each user's records, photos and exports are only ever served to that user.
   Backup restores only touch the restoring user's own records and photos, are
   size-limited, and only accept photos in the app's own format.
@@ -194,8 +217,11 @@ forwarding a port on your router — the app isn't meant to face the open intern
   capabilities and no privilege escalation; updates never delete database data
   without you confirming it ([details](#updates-that-change-the-database)).
 
-Found a problem? Open an issue on the repository (no exploit details in public,
-please — say there's a security issue and how to reach you).
+This is a small app for a household or a handful of people on a home network.
+It has no audit logging, high-availability or scaling features, and it hasn't
+had an outside security review. Keep it behind your network or Tailscale.
+Found a security problem? Open an issue saying so and how to reach you, without
+exploit details.
 
 ## Inviting family & friends
 
@@ -267,10 +293,7 @@ docker compose down               # stop
 git pull && docker compose up -d --build   # update: rebuild after pulling changes
 ```
 
-Data lives in the `$APPDATA/reselling-app/` folders, so `docker compose down -v`
-does **not** delete it. To wipe a local dev install, stop the stack and delete
-`dev-data/`:
-
-```bash
-docker compose down && rm -rf dev-data   # DELETES local db + photos
-```
+Data lives in the `DATA_DIR/reselling-app/` folders, so `docker compose down -v`
+does **not** delete it. To start over completely, run `docker compose down`,
+then delete the data folder (`./data` by default) in Finder, File Explorer or
+your NAS file manager. **This deletes the database and photos.**

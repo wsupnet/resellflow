@@ -10,12 +10,20 @@ Code and data live in separate places:
 | App data | `/volume1/docker/appdata/reselling-app/` | Outside the repo, so `git pull` never touches it. |
 | ├ `postgres/` | → `/var/lib/postgresql/data` in `db` | Postgres keeps its files in the `pgdata/` subfolder. |
 | ├ `uploads/` | → `/app/uploads` in `app` | Item photos (`<id>.jpg` + `<id>.thumb.jpg`). |
-| ├ `secrets/` | → `/app/secrets` in `app` | `auth_secret`, generated on first boot if `.env` has no `AUTH_SECRET`. Keep it private. |
+| ├ `secrets/` | → `/app/secrets` in `app`, `/secrets` in `db` | `db_password` and `auth_secret`, generated on first start unless `.env` sets them. Keep it private. |
 | └ `tailscale/` | → `/var/lib/tailscale` in `tailscale` | Only used with the `ts` profile (`COMPOSE_PROFILES=ts` on the NAS). |
 
-The data folders are **bind mounts**, set by `APPDATA` in `.env`
-(`APPDATA=/volume1/docker/appdata` on the NAS). Compose refuses to start if
-`APPDATA` isn't set. Docker creates any missing folder on first start.
+The data folders are **bind mounts** under `DATA_DIR`
+(`DATA_DIR=/volume1/docker/appdata` in `.env` on the NAS; the default `./data`
+would put them inside the repo folder). Docker creates any missing folder on
+first start.
+
+> **Upgrading from a version that used `APPDATA`:** in `.env`, rename
+> `APPDATA=/volume1/docker/appdata` to `DATA_DIR=/volume1/docker/appdata` before
+> `docker compose up`, and keep your existing `POSTGRES_PASSWORD`, `DATABASE_URL`
+> and `ADMIN_*` lines. If you forget, the app starts on an empty `./data` folder
+> (your real data isn't touched) and warns about the leftover `APPDATA` line in
+> the logs and on the setup page.
 
 Caddy's `caddy_data` / `caddy_config` deliberately stay Docker named volumes: the
 `https` profile isn't used on the NAS, so they hold no NAS data.
@@ -23,7 +31,8 @@ Caddy's `caddy_data` / `caddy_config` deliberately stay Docker named volumes: th
 ## ⚡ Simplest path (build on the NAS, like any other app)
 
 The compose file builds the app from source on the NAS, so there's **no tarball
-and no registry**. You only need a `.env` with your own secrets.
+and no registry**. Secrets are generated on first start; the `.env` only says
+where the data goes and how to reach the app.
 
 1. SSH in and clone the repo:
    ```bash
@@ -31,20 +40,18 @@ and no registry**. You only need a `.env` with your own secrets.
    git clone <repo-url> reselling-app
    cd reselling-app
    ```
-2. `cp .env.example .env` and set the REQUIRED values (`POSTGRES_PASSWORD`,
-   `DATABASE_URL` with that same password, `ADMIN_EMAIL`, `ADMIN_PASSWORD` — 12+
-   characters), **`APPDATA=/volume1/docker/appdata`**,
+2. Create a `.env` with **`DATA_DIR=/volume1/docker/appdata`**,
    **`APP_BIND=0.0.0.0`** (so other devices can open `http://<NAS-IP>:3939`; the
-   default only answers on the NAS itself) and
-   **`COMPOSE_PROFILES=ts`** (plus `TS_AUTHKEY`) — see section 2 below. Compose
-   refuses to start until the required ones are set.
+   default only answers on the NAS itself) and, for HTTPS,
+   **`COMPOSE_PROFILES=ts`** plus `TS_AUTHKEY` (see section 2 below).
 3. Run:
    ```bash
    sudo docker compose up -d --build
    ```
    The first build takes a few minutes (it installs dependencies + compiles).
-4. Wait until it's up, then open `http://<NAS-IP>:3939` and log in with the
-   `ADMIN_EMAIL` / `ADMIN_PASSWORD` you set in `.env`.
+4. Wait until it's up, then **right away** open `http://<NAS-IP>:3939` and create
+   the admin account on the setup page. (Until an account exists, anyone on your
+   network who opens the page first could claim it.)
 
 That's the whole deployment. Start fresh and add your inventory in the app.
 
@@ -58,17 +65,12 @@ sudo docker compose up -d --build
 `docker compose down -v` does **not** delete the data folders — they're bind
 mounts, not Docker volumes.
 
-### Optional config
-There are no built-in default secrets — everything comes from your `.env`.
-Everything below is reference for HTTPS and backups.
-
 ---
 
-
-
-ResellFlow is a standard Docker Compose app, so any NAS that runs Docker can host
-it: **Synology** (Container Manager), **QNAP** (Container Station), **Unraid**,
-or **TrueNAS SCALE**.
+ResellFlow is a standard Docker Compose app. It has been run on a **UGREEN** NAS;
+other NAS systems that run Docker with Compose v2 (Synology Container Manager,
+QNAP Container Station, Unraid, TrueNAS SCALE) should work the same way, but
+haven't been tested.
 
 ## UGREEN NAS (UGOS Pro) — quick path
 
@@ -80,12 +82,11 @@ UGREEN NASync boxes are x86/amd64 with ample RAM, so build on the NAS directly.
    appears as `/volume1/docker`.
 4. **SSH in:** `ssh <youruser>@<NAS-IP>`, then clone the repo into
    `/volume1/docker/apps/reselling-app` (see "Simplest path" above).
-5. `cp .env.example .env` and set the REQUIRED values, including
-   `APPDATA=/volume1/docker/appdata` (see section 2 below).
+5. Create the `.env` with `DATA_DIR=/volume1/docker/appdata` and
+   `APP_BIND=0.0.0.0` (see section 2 below).
    Then `sudo docker compose up -d --build` (UGOS usually needs `sudo` for
    docker). First build takes a few minutes.
-6. Open `http://<NAS-IP>:3939` and log in with the `ADMIN_EMAIL` /
-   `ADMIN_PASSWORD` from your `.env`.
+6. Open `http://<NAS-IP>:3939` and create the admin account.
 7. **HTTPS for the camera:** UGOS may not have a Tailscale app yet, and its web UI
    can occupy 80/443 (so the Caddy profile may clash). Easiest reliable option is
    **Tailscale in a container** doing `serve` — see "HTTPS via Tailscale container"
@@ -109,27 +110,24 @@ git clone <repo-url> reselling-app
 ```
 `node_modules/`, `.next/` and `.env` aren't in Git — the image build recreates
 the first two, and you create `.env` next. Your data does **not** go in the repo
-folder; it lives under `APPDATA` (see "Layout on the NAS").
+folder; it lives under `DATA_DIR` (see "Layout on the NAS").
 
 ## 2. Create the `.env`
-In the project folder on the NAS:
-```bash
-cp .env.example .env
-```
-Edit `.env` and set:
-- `APPDATA` — `/volume1/docker/appdata` (the stack stores its data in
-  `$APPDATA/reselling-app/`)
+In the project folder on the NAS, copy `.env.example` to `.env` (or create an
+empty `.env`) and set what you need. Everything is optional:
+- `DATA_DIR` — `/volume1/docker/appdata` (the stack stores its data in
+  `$DATA_DIR/reselling-app/`)
 - `COMPOSE_PROFILES=ts` — so the Tailscale sidecar starts with every
   `docker compose up` (needs `TS_AUTHKEY`; see "HTTPS via Tailscale container")
-- `POSTGRES_PASSWORD` — a strong password
-- `DATABASE_URL` — must contain that same password (e.g. `postgresql://resell:THEPASSWORD@db:5432/resellflow?schema=public`)
-- `AUTH_SECRET` — optional; generated on first boot into
-  `$APPDATA/reselling-app/secrets/` if unset (or set your own: `openssl rand -base64 48`)
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD` — your login
-- `APP_PORT` — a free port on the NAS (Synology uses 5000/5001; pick e.g. `3939`)
+- `APP_PORT` — a free port on the NAS (default `3939`)
 - `APP_BIND=0.0.0.0` — publish that port on the LAN. Without it the app only answers
   on the NAS itself (fine if you only use the Tailscale URL)
 - `SITE_ADDRESS` — your NAS IP or Tailscale name (only used if you run the Caddy HTTPS profile)
+
+The database password and `AUTH_SECRET` are generated into
+`$DATA_DIR/reselling-app/secrets/` on first start. You can still set
+`POSTGRES_PASSWORD`, `AUTH_SECRET` and `ADMIN_EMAIL` / `ADMIN_PASSWORD` yourself
+(see `.env.example`).
 
 ## 3. Build & start
 Over SSH, from the project folder:
@@ -137,6 +135,9 @@ Over SSH, from the project folder:
 docker compose up -d --build
 ```
 First build takes a few minutes. Check it's up: `docker compose ps` and `docker compose logs -f app`.
+The log shows the data folder on every start, and on a first start says it
+created a new, empty database. If it shows **DATA EXPECTED BUT NOT FOUND**
+instead, stop and check `DATA_DIR` before creating an account.
 
 ## 4. Restore your data
 From a SQL dump and a photos folder (kept **outside** the repo, e.g. in
@@ -144,14 +145,14 @@ From a SQL dump and a photos folder (kept **outside** the repo, e.g. in
 ```bash
 B=/volume1/docker/appdata/reselling-app/backups
 # Database
-cat $B/resellflow-db.sql | docker compose exec -T db psql -U resell -d resellflow
+docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < $B/resellflow-db.sql
 
 # Photos — copy straight into the bind-mounted uploads folder
 cp -a $B/uploads/. /volume1/docker/appdata/reselling-app/uploads/
 ```
 > Re-run the DB dump on the old machine right before cutover so you capture the
 > latest data:
-> `docker compose exec -T db pg_dump -U resell -d resellflow --clean --if-exists > resellflow-db.sql`
+> `docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' > resellflow-db.sql`
 
 ### Moving from the old Docker named volumes
 Earlier versions kept data in the named volumes `reselling-app_db_data`,
@@ -210,7 +211,7 @@ stopped, so also take a SQL dump regularly:
 B=/volume1/docker/appdata/reselling-app/backups
 mkdir -p $B
 # DB snapshot
-docker compose exec -T db pg_dump -U resell -d resellflow --clean --if-exists > $B/resellflow-$(date +%F).sql
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' > $B/resellflow-$(date +%F).sql
 # Photos snapshot
 cp -a /volume1/docker/appdata/reselling-app/uploads $B/uploads-$(date +%F)
 ```
@@ -225,7 +226,7 @@ folder — they're real business data.
   git pull
   sudo docker compose up -d --build
   ```
-  Data under `APPDATA` is untouched by both steps. If an update would delete data
+  Data under `DATA_DIR` is untouched by both steps. If an update would delete data
   from the database, the app refuses to start and says so in
   `sudo docker compose logs app` — see "Updates that change the database" in the
   [README](../README.md#updates-that-change-the-database).
@@ -243,6 +244,8 @@ folder — they're real business data.
   - If the database password in `DATABASE_URL` is wrong, the app now stops with
     that error in `sudo docker compose logs app` instead of "waiting for db..."
     forever.
+- **Updating from a version that used `APPDATA`:** see the note under "Layout on
+  the NAS" above. Rename the `.env` line to `DATA_DIR` first.
 
 ## 9. Passwords & lockout
 
@@ -254,10 +257,12 @@ folder — they're real business data.
   for 15 minutes (restarting the app also clears it). Browsers that have signed
   in to that account before keep their own allowance, so you can still get in
   from your usual devices while someone else is guessing.
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env` are only used to create the admin
-  account on the **first** boot, and that boot stops if the password is under 12
-  characters or an example value. Changing `ADMIN_PASSWORD` later does nothing to
-  the existing account (and changing `ADMIN_EMAIL` would create a second admin).
+- The admin is normally created on the setup page at first visit. If `.env` sets
+  `ADMIN_EMAIL` / `ADMIN_PASSWORD`, they're only used to create that account
+  while it doesn't exist (a password under 12 characters or an example value is
+  refused, and the setup page is offered instead). Changing `ADMIN_PASSWORD`
+  later does nothing to the existing account, and changing `ADMIN_EMAIL` would
+  create a second admin.
 
 **Locked out?** Reset a password from the NAS over SSH, in the project folder:
 ```bash
@@ -275,7 +280,7 @@ shell history).
 `docker-compose.yml` already includes a `tailscale` service (profile `ts`) that
 shares the app's network and serves it over HTTPS with a trusted cert — no host
 ports needed, works remotely. It uses the repo's `./deploy/serve.json` and keeps its
-state in `$APPDATA/reselling-app/tailscale`.
+state in `$DATA_DIR/reselling-app/tailscale`.
 
 1. In the Tailscale admin console, create a **reusable auth key**.
 2. Put `TS_AUTHKEY=tskey-...` and `COMPOSE_PROFILES=ts` in `.env` (optionally

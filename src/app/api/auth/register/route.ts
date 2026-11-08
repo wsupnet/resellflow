@@ -7,22 +7,40 @@ import { isCrossSite, isJson } from "@/lib/origin";
 import { passwordProblem } from "@/lib/password";
 import { normalizeEmail } from "@/lib/email";
 import { readJsonLimited } from "@/lib/body";
+import { markHasData } from "@/lib/datadir";
 
 const WINDOW_MS = 60 * 60 * 1000;
 const IP_LIMIT = 10;
 const GLOBAL_LIMIT = 100;
 const MAX_BODY_BYTES = 8 * 1024;
 
-// Invite-only registration: a valid, unused invite code is required.
+// Invite-only registration: a valid, unused invite code is required — except for
+// the very first account on a new install, which needs no code and becomes the
+// admin (the first-run setup page).
 const schema = z.object({
   email: z.string().email().max(254),
   password: z.string().max(1024),
   displayName: z.string().max(100).optional(),
-  code: z.string().min(1, "An invite code is required").max(100)
+  code: z.string().max(100).optional()
 });
 
 // Thrown inside the transaction when a concurrent signup claimed the invite first.
 class InviteTaken extends Error {}
+// Thrown when someone else finished first-run setup a moment earlier.
+class SetupDone extends Error {}
+
+// Any fixed number: serializes first-run setups so only one can create the admin.
+const SETUP_LOCK = 7_301_942;
+
+async function createFirstAdmin(email: string, passwordHash: string, displayName?: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SETUP_LOCK})`;
+    if ((await tx.user.count()) > 0) throw new SetupDone();
+    return tx.user.create({
+      data: { email, passwordHash, displayName: displayName || "Admin", isAdmin: true, settings: { create: {} } }
+    });
+  });
+}
 
 export async function POST(req: Request) {
   if (isCrossSite(req) || !isJson(req)) {
@@ -48,6 +66,24 @@ export async function POST(req: Request) {
   // Throttle invite-code guessing overall (codes are 48-bit random, so 100/hour
   // makes guessing hopeless) and per client IP when TRUST_PROXY says the
   // X-Forwarded-For header can be believed.
+  if (!code) {
+    // No code: only allowed while the install has no accounts at all.
+    if ((await prisma.user.count()) > 0) {
+      return NextResponse.json({ error: "An invite code is required" }, { status: 400 });
+    }
+    try {
+      const admin = await createFirstAdmin(lowerEmail, await hashPassword(password), displayName);
+      markHasData();
+      await createSession(admin.id);
+      return NextResponse.json({ ok: true });
+    } catch (e) {
+      if (e instanceof SetupDone) {
+        return NextResponse.json({ error: "Setup was already completed. Sign in, or ask the admin for an invite." }, { status: 409 });
+      }
+      throw e;
+    }
+  }
+
   const ip = clientIp(req);
   const keys: [string, number][] = [["register:all", GLOBAL_LIMIT], ...(ip ? [[`register:ip:${ip}`, IP_LIMIT] as [string, number]] : [])];
   const wait = Math.max(...keys.map(([k, limit]) => retryAfter(k, limit)));

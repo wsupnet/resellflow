@@ -1,4 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import { ensureDatabaseUrl } from "./dburl";
+
+// DATABASE_URL is normally built from the generated db password (see dburl.ts).
+ensureDatabaseUrl();
 
 // Reuse the client across hot reloads in dev to avoid exhausting connections.
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
