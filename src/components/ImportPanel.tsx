@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import InfoTip from "@/components/InfoTip";
 import { importInventoryCsv, importSalesCsv, restoreBackup, type ImportResult } from "@/lib/actions";
 
 export function BackupRestore() {
@@ -62,11 +63,13 @@ function Result({ res }: { res: ImportResult }) {
 function ImportOne({
   label,
   hint,
+  tip,
   action,
   templateHref
 }: {
   label: string;
   hint: string;
+  tip?: string;
   action: (fd: FormData) => Promise<ImportResult>;
   templateHref?: string;
 }) {
@@ -89,7 +92,10 @@ function ImportOne({
 
   return (
     <form onSubmit={onSubmit} className="rounded-lg border border-slate-100 p-3">
-      <div className="text-sm font-medium">{label}</div>
+      <div className="flex items-center gap-1.5 text-sm font-medium">
+        {label}
+        {tip && <InfoTip text={tip} />}
+      </div>
       <p className="mb-2 text-xs text-slate-400">{hint}</p>
       <div className="flex flex-wrap items-center gap-2">
         <input type="file" name="file" accept=".csv,text/csv" required className="text-sm" />
@@ -111,6 +117,7 @@ export function CsvImports() {
     <div className="space-y-3">
       <ImportOne
         label="Import inventory"
+        tip="Imports are additive — they only create new records and never overwrite existing data. Start from the templates above — they include two example rows to overwrite."
         hint="CSV columns: title (required), sku, category, condition, status, source, location, costUsd, costJpy, estimatedValue, purchasedAt, dateApprox (yes = best-guess date), type (personal), notes. Each row creates a new single item."
         action={importInventoryCsv}
         templateHref="/api/export?type=template-inventory"
@@ -121,9 +128,6 @@ export function CsvImports() {
         action={importSalesCsv}
         templateHref="/api/export?type=template-sales"
       />
-      <p className="text-xs text-slate-400">
-        Imports are additive — they only create new records and never overwrite existing data. Start from the templates above — they include two example rows to overwrite.
-      </p>
     </div>
   );
 }

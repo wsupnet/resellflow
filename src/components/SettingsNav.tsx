@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 export const SETTINGS_SECTIONS = [
-  { slug: "fees", label: "Selling fees", hint: "eBay, Mercari, ads, shipping" },
-  { slug: "currency", label: "Currency", hint: "$ / ¥ and exchange rate" },
-  { slug: "preferences", label: "Preferences", hint: "Theme and timezone" },
-  { slug: "privacy", label: "Barcodes & privacy", hint: "What leaves your server" },
-  { slug: "locations", label: "Locations", hint: "Where you source from" },
-  { slug: "data", label: "Data", hint: "Export, import, backup" },
-  { slug: "account", label: "Account", hint: "Password and sign-in" },
-  { slug: "invites", label: "Invites", hint: "Family & friends", adminOnly: true }
+  { slug: "fees", label: "Selling fees" },
+  { slug: "currency", label: "Currency" },
+  { slug: "preferences", label: "Preferences" },
+  { slug: "privacy", label: "Barcodes & privacy" },
+  { slug: "locations", label: "Locations" },
+  { slug: "data", label: "Data" },
+  { slug: "account", label: "Account" },
+  { slug: "invites", label: "Invites", adminOnly: true }
 ] as const;
 
 /** Settings section menu: a list down the left on desktop, a picker on phones. */
@@ -43,7 +43,6 @@ export default function SettingsNav({ isAdmin }: { isAdmin: boolean }) {
                   className={`block rounded-lg px-3 py-2 text-sm ${active ? "bg-brand-50 font-semibold text-brand-700" : "text-slate-600 hover:bg-slate-100"}`}
                 >
                   {s.label}
-                  <span className={`block text-xs font-normal ${active ? "text-brand-600/80" : "text-slate-400"}`}>{s.hint}</span>
                 </Link>
               </li>
             );

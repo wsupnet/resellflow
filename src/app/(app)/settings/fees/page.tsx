@@ -10,11 +10,9 @@ export default async function FeesSettings() {
   const settings = await loadSettings(user.id);
   return (
     <div className="card">
-      <SectionTitle>Selling fees</SectionTitle>
-      <p className="mb-4 text-sm text-slate-500">
-        Used to work out fees automatically when you record a sale. These are starting defaults: adjust them to match what
-        each platform actually charges you. Past sales keep the fees they were recorded with.
-      </p>
+      <SectionTitle tip="Used to work out fees when you record a sale. Set them to what each platform charges you. Past sales keep the fees they were recorded with.">
+        Selling fees
+      </SectionTitle>
       <form action={updateSettings} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <input type="hidden" name="section" value="fees" />
         <div>

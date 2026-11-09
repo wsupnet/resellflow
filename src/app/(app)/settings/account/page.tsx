@@ -12,10 +12,10 @@ export default async function AccountSettings() {
     <>
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="card">
-          <SectionTitle>Password</SectionTitle>
+          <SectionTitle tip="Changing your password signs out every other device.">Password</SectionTitle>
           <p className="mb-4 text-sm text-slate-500">
             Signed in as <b>{user.email}</b>
-            {user.isAdmin ? " (admin)" : ""}. Changing your password signs out every other device.
+            {user.isAdmin ? " (admin)" : ""}.
           </p>
           <ChangePasswordForm />
         </div>

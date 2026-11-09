@@ -57,7 +57,8 @@ HTTPS section of [Hosting on a NAS](DEPLOY-NAS.md).
 Do this once, before you record sales, so fees are calculated correctly.
 
 **Settings** has a menu of sections down the left (a **Section** picker at the top on a phone).
-Each section has its own Save button and saves only its own settings.
+Each section has its own Save button and saves only its own settings. To see what a setting does,
+hover over or tap the **?** next to it.
 
 1. **Selling fees**: check each rate against what your platforms actually charge you, then
    **Save fees**:

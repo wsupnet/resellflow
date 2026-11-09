@@ -16,10 +16,7 @@ export default async function InvitesSettings() {
   const [invites, tz] = await Promise.all([prisma.invite.findMany({ orderBy: { createdAt: "desc" } }), getUserTz(user.id)]);
   return (
     <div className="card">
-      <SectionTitle>Invites</SectionTitle>
-      <p className="mb-4 text-sm text-slate-500">
-        Registration is invite-only. Create a code and share the link with family/friends who resell.
-      </p>
+      <SectionTitle tip="Registration is invite-only. Create a code and share the link with family or friends who resell.">Invites</SectionTitle>
       <form action={createInvite} className="mb-4 flex flex-wrap items-end gap-2">
         <div className="grow">
           <label className="label">Lock to email (optional)</label>

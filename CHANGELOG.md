@@ -7,6 +7,10 @@ Format: one `## <version> — <date>` heading per release (newest first), then
 `- **Title**: description` bullets. The newest heading is the app's version, so
 bump `package.json` to match when you add one.
 
+## 0.2.1 — 2026-11-09
+
+- **Tidier Settings**: the long explanations are gone. Hover over or tap the **?** next to a setting to see what it does.
+
 ## 0.2.0 — 2026-11-09
 
 - **Edit purchase details from the item page**: change an item's purchase date, best-guess flag, source, location and (for single buys) what you paid, right on its page. For an item from a lot, the change applies to the whole lot.

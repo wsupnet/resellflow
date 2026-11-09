@@ -26,10 +26,6 @@ export default function TimezoneField({ value, zones }: { value: string | null; 
           </button>
         )}
       </div>
-      <p className="mt-1 text-xs text-slate-400">
-        Decides what &quot;today&quot; is when you leave a date blank, and where days, months and years start in reports.
-        Dates you type in are kept exactly as entered.
-      </p>
     </div>
   );
 }

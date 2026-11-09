@@ -148,7 +148,8 @@ sales add up to it, so there are no mystery totals.
 
 ### ⚙️ Settings
 
-A menu of sections down the left (a picker on phones), each with its own Save button:
+A menu of sections down the left (a picker on phones), each with its own Save button. Each
+setting's explanation sits in a **?** tooltip beside it:
 
 - **Selling fees**: eBay, Mercari, ad and default shipping rates (past sales keep the rates they were recorded with)
 - **Currency**: USD or yen as your primary currency, the other one as an optional second (or turn it off),

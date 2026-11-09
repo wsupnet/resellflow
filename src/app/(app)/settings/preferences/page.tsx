@@ -12,8 +12,7 @@ export default async function PreferencesSettings() {
   const settings = await loadSettings(user.id);
   return (
     <div className="card">
-      <SectionTitle>Preferences</SectionTitle>
-      <p className="mb-4 text-sm text-slate-500">How the app looks, and which timezone it works in.</p>
+      <SectionTitle tip="How the app looks, and which timezone it works in.">Preferences</SectionTitle>
       <form action={updateSettings} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <input type="hidden" name="section" value="preferences" />
         <div>
@@ -24,9 +23,6 @@ export default async function PreferencesSettings() {
             <option value="dark">Dark</option>
             <option value="system">System — follow my device</option>
           </select>
-          <p className="mt-1 text-xs text-slate-400">
-            How the app looks on every page. System switches with your phone or computer&apos;s light/dark setting automatically.
-          </p>
         </div>
         <TimezoneField value={isValidTz(settings.timezone) ? settings.timezone : null} zones={allTimezones()} />
         <div className="lg:col-span-2">

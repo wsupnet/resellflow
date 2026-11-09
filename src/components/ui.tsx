@@ -76,11 +76,24 @@ export function StatusPill({ status }: { status: "UNLISTED" | "LISTED" | "SOLD" 
   return <span className={clsx("pill", map[status])}>{status.toLowerCase()}</span>;
 }
 
-export function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+export function SectionTitle({ children, action, tip }: { children: React.ReactNode; action?: React.ReactNode; tip?: string }) {
   return (
     <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-lg font-semibold text-slate-800">{children}</h2>
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+        {children}
+        {tip && <InfoTip text={tip} />}
+      </h2>
       {action}
+    </div>
+  );
+}
+
+/** A form field label with an optional ? tooltip for its explanation. */
+export function FieldLabel({ children, tip, htmlFor }: { children: React.ReactNode; tip?: string; htmlFor?: string }) {
+  return (
+    <div className="label flex items-center gap-1.5">
+      <label htmlFor={htmlFor}>{children}</label>
+      {tip && <InfoTip text={tip} />}
     </div>
   );
 }

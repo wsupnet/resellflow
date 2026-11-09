@@ -10,10 +10,11 @@ export default async function LocationsSettings() {
   const count = await prisma.location.count({ where: { userId: user.id } });
   return (
     <div className="card">
-      <SectionTitle>Sourcing locations</SectionTitle>
+      <SectionTitle tip="The specific places you source from (a particular Book Off, a regular estate-sale company…), so you can see which spots make you the most profit.">
+        Sourcing locations
+      </SectionTitle>
       <p className="mb-3 text-sm text-slate-500">
-        The specific places you source from (a particular Book Off, a regular estate-sale company…), so you can see which
-        spots make you the most profit. You have {count === 0 ? "none yet" : `${count} location${count === 1 ? "" : "s"}`}.
+        You have {count === 0 ? "no locations yet" : `${count} location${count === 1 ? "" : "s"}`}.
       </p>
       <Link href="/locations" className="btn-ghost">Manage locations →</Link>
     </div>
