@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { getItemDetail, getFinancials, buildYen } from "@/lib/queries";
+import { getItemDetail, getFinancials, buildYen, listLocations } from "@/lib/queries";
 import { StatCard, Net, Roi, StatusPill } from "@/components/ui";
 import PhotoManager from "@/components/PhotoManager";
-import { shortDate, fmtDeduction } from "@/lib/format";
+import { shortDate, fmtDeduction, purchaseDate } from "@/lib/format";
+import { getFxRate } from "@/lib/fx";
+import ItemEditForm from "@/components/ItemEditForm";
+import PurchaseEditForm from "@/components/PurchaseEditForm";
 import { getMoney, fmtMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +18,8 @@ export default async function ItemDetailPage(props: { params: Promise<{ id: stri
   const detail = await getItemDetail(user.id, params.id);
   if (!detail) notFound();
 
-  const { item, lot, fin, sale, fees, expenses, daysToSell, daysInStock, dateApprox, variantSold, variantAvgDaysToSell, tracksCond } = detail;
-  const m = await getMoney(user.id);
+  const { item, lot, fin, sale, fees, expenses, daysToSell, daysInStock, dateApprox, variantSold, variantAvgDaysToSell, tracksCond, units } = detail;
+  const [m, fx, locations] = await Promise.all([getMoney(user.id), getFxRate(user.id), listLocations(user.id)]);
   // Historical mode: this item's figures at locked rates.
   const iy = m.currency === "JPY" && m.mode === "historical" ? buildYen(await getFinancials(user.id), m.rate).itemFinYen.get(params.id) : null;
   const feeTotal = fees.reduce((a, f) => a + f.amount, 0);
@@ -27,7 +30,12 @@ export default async function ItemDetailPage(props: { params: Promise<{ id: stri
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/inventory" className="text-sm text-brand-600">← Inventory</Link>
+        <div className="flex flex-wrap gap-x-4 text-sm">
+          <Link href="/inventory" className="text-brand-600">← Inventory</Link>
+          {item.productId && units.length > 1 && (
+            <Link href={`/products/${item.productId}`} className="text-brand-600">All {units.length} units of this product →</Link>
+          )}
+        </div>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold">{item.title}</h1>
           <StatusPill status={item.status} />
@@ -41,6 +49,7 @@ export default async function ItemDetailPage(props: { params: Promise<{ id: stri
           ) : (
             <>single purchase · {lot.source}</>
           )}
+          {" · "}bought {purchaseDate(lot)}
           {sale && <> · sold on {sale.platform.toLowerCase()} {shortDate(sale.soldAt)}</>}
         </p>
       </div>
@@ -64,6 +73,83 @@ export default async function ItemDetailPage(props: { params: Promise<{ id: stri
           {variantAvgDaysToSell == null && "."}
         </p>
       )}
+
+      {units.length > 1 && (
+        <div className="card">
+          <h2 className="mb-1 text-lg font-semibold">Units of this product ({units.length})</h2>
+          <p className="mb-3 text-xs text-slate-400">You have more than one of these. Pick the one you want to view or edit.</p>
+          <div className="overflow-x-auto">
+            <table className="min-w-full rtable">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="th">Unit</th>
+                  <th className="th">Status</th>
+                  <th className="th">Purchased</th>
+                  <th className="th">From</th>
+                  <th className="th"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {units.map((u) => {
+                  const current = u.id === item.id;
+                  return (
+                    <tr key={u.id} className={`border-b border-slate-50 ${current ? "bg-brand-50/50" : "hover:bg-slate-50/60"}`}>
+                      <td className="td cell-main" data-label="">
+                        <span className="font-medium text-slate-800">{u.title}</span>
+                        {u.condition && <span className="ml-2 text-xs text-slate-500">{u.condition}</span>}
+                      </td>
+                      <td className="td" data-label="Status"><StatusPill status={u.status} /></td>
+                      <td className="td whitespace-nowrap text-slate-500" data-label="Purchased">{purchaseDate(u)}</td>
+                      <td className="td text-slate-500" data-label="From">{u.isLot ? `lot: ${u.purchaseTitle}` : u.source}</td>
+                      <td className="td cell-action text-right" data-label="">
+                        {current ? (
+                          <span className="text-xs font-medium text-slate-400">viewing</span>
+                        ) : (
+                          <Link href={`/items/${u.id}`} className="text-xs font-medium text-brand-600">Edit this one →</Link>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="card">
+          <h2 className="mb-3 text-lg font-semibold">Item details</h2>
+          <ItemEditForm
+            key={`${item.id}-${item.title}-${item.status}-${item.product?.sku ?? ""}-${item.condition ?? ""}`}
+            data={{
+              id: item.id,
+              title: item.title,
+              status: item.status,
+              estimatedValue: item.estimatedValue,
+              costOverrideUsd: item.costOverrideUsd,
+              costOverrideJpy: item.costOverrideJpy,
+              notes: item.notes,
+              sku: item.product?.sku ?? null,
+              category: item.product?.category ?? null,
+              condition: item.condition
+            }}
+            rate={fx.rate}
+            m={m}
+            cols={2}
+          />
+        </div>
+        <div className="card">
+          <h2 className="mb-3 text-lg font-semibold">Purchase details</h2>
+          <PurchaseEditForm
+            key={`${lot.id}-${+new Date(lot.purchasedAt)}-${lot.source}-${lot.locationId ?? ""}-${lot.costUsd}`}
+            purchase={lot}
+            itemCount={lot.items.length}
+            locations={locations}
+            m={m}
+          />
+        </div>
+      </div>
 
       <div className="card">
         <h2 className="mb-3 text-lg font-semibold">Photos</h2>

@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { updateItem, deleteItem } from "@/lib/actions";
+import { deleteItem } from "@/lib/actions";
 import { shortDate, fmtMoney, type MoneyCtx } from "@/lib/format";
 import { Net, Roi, StatusPill } from "@/components/ui";
-import { CATEGORIES, conditionsFor, tracksCondition } from "@/lib/catalog";
-import ScanButton from "@/components/ScanButton";
+import { tracksCondition } from "@/lib/catalog";
+import ItemEditForm from "@/components/ItemEditForm";
 import ConfirmButton from "@/components/ConfirmButton";
-import { useCurrencyPrefs } from "@/components/CurrencyPrefs";
 
 export interface ItemRowData {
   id: string;
@@ -55,24 +54,9 @@ export default function ItemRow({
   rate: number;
   m: MoneyCtx;
 }) {
-  const { single } = useCurrencyPrefs();
   const [open, setOpen] = useState(false);
-  const [sku, setSku] = useState(data.sku ?? "");
-  const [category, setCategory] = useState(data.category ?? "");
-  // If the override was typed in yen, show the exact stored yen (JPY selected).
-  const [override, setOverride] = useState(
-    data.costOverrideJpy != null ? String(data.costOverrideJpy) : data.costOverrideUsd != null ? String(data.costOverrideUsd) : ""
-  );
-  // Existing override keeps its own currency; a fresh one defaults to the view currency.
-  const [overrideCur, setOverrideCur] = useState<"USD" | "JPY">(
-    data.costOverrideJpy != null ? "JPY" : data.costOverrideUsd != null ? "USD" : m.currency
-  );
-
-  // The override is stored in USD; convert from yen when that toggle is active.
-  const overrideUsd =
-    override.trim() === "" || !Number.isFinite(Number(override))
-      ? ""
-      : (overrideCur === "JPY" ? Number(override) / rate : Number(override)).toFixed(2);
+  // Category for the hint under the editor (the form owns its own copy).
+  const category = data.category ?? "";
 
   return (
     <>
@@ -146,15 +130,8 @@ export default function ItemRow({
           <button
             type="button"
             onClick={() => {
-              // Re-seed from the current row data on every open, so the form always
-              // shows the item's latest details (barcode, category, override) even
-              // after saves/merges elsewhere re-rendered the row.
-              if (!open) {
-                setSku(data.sku ?? "");
-                setCategory(data.category ?? "");
-                setOverride(data.costOverrideJpy != null ? String(data.costOverrideJpy) : data.costOverrideUsd != null ? String(data.costOverrideUsd) : "");
-                setOverrideCur(data.costOverrideJpy != null ? "JPY" : data.costOverrideUsd != null ? "USD" : m.currency);
-              }
+              // The form mounts fresh on every open, so it always starts from the
+              // item's latest details even after saves/merges re-rendered the row.
               setOpen((o) => !o);
             }}
             className="block w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-brand-600 md:inline md:w-auto md:border-0 md:py-0"
@@ -166,96 +143,7 @@ export default function ItemRow({
       {open && (
         <tr className="border-b border-slate-100 bg-slate-50/60">
           <td colSpan={9} className="cell-block px-3 py-4" data-label="">
-            <form action={updateItem} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-              <input type="hidden" name="id" value={data.id} />
-              <div className="sm:col-span-2">
-                <label className="label">Title</label>
-                <input name="title" defaultValue={data.title} className="input" />
-              </div>
-              <div>
-                <label className="label">Status</label>
-                <select name="status" defaultValue={data.status} className="input">
-                  <option value="UNLISTED">Unlisted</option>
-                  <option value="LISTED">Listed</option>
-                  <option value="SOLD">Sold</option>
-                  <option value="LOST">Lost (write-off)</option>
-                  <option value="DAMAGED">Damaged (write-off)</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Category</label>
-                <select name="category" value={category} onChange={(e) => setCategory(e.target.value)} className="input">
-                  <option value="">— none —</option>
-                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                </select>
-              </div>
-              {tracksCondition(category) ? (
-                <div>
-                  <label className="label">Condition</label>
-                  <select name="condition" defaultValue={data.condition ?? ""} className="input">
-                    <option value="">— unset —</option>
-                    {(() => {
-                      const opts = conditionsFor(category);
-                      // Preserve a value set under a different list so it isn't lost.
-                      const list = data.condition && !opts.includes(data.condition) ? [data.condition, ...opts] : opts;
-                      return list.map((c) => <option key={c}>{c}</option>);
-                    })()}
-                  </select>
-                </div>
-              ) : (
-                // Keep submitting condition so switching a tracked→untracked category clears it.
-                <input type="hidden" name="condition" value="" />
-              )}
-              <div>
-                <label className="label">Barcode / SKU</label>
-                <div className="flex gap-2">
-                  <input name="sku" value={sku} onChange={(e) => setSku(e.target.value)} className="input font-mono" placeholder="scan or type a code" />
-                  <ScanButton onCode={setSku} className="btn-ghost shrink-0" label="" />
-                </div>
-              </div>
-              <div>
-                <label className="label">Est. value ($)</label>
-                <input name="estimatedValue" inputMode="decimal" defaultValue={data.estimatedValue ?? ""} className="input" />
-              </div>
-              <div>
-                <label className="label">Cost override</label>
-                <div className="flex gap-2">
-                  <input
-                    inputMode="decimal"
-                    value={override}
-                    onChange={(e) => setOverride(e.target.value)}
-                    className="input"
-                    placeholder="blank = auto split"
-                  />
-                  {/* One-currency mode still shows the picker for an override stored in the other currency. */}
-                  {single && overrideCur === m.currency ? (
-                    <span className="self-center text-sm text-slate-500">{overrideCur === "JPY" ? "¥" : "$"}</span>
-                  ) : (
-                    <select
-                      value={overrideCur}
-                      onChange={(e) => setOverrideCur(e.target.value as "USD" | "JPY")}
-                      className="input w-20"
-                    >
-                      <option>USD</option>
-                      <option>JPY</option>
-                    </select>
-                  )}
-                </div>
-                {/* Always submitted in USD; the exact entered yen rides along when typed in ¥. */}
-                <input type="hidden" name="costOverrideUsd" value={overrideUsd} />
-                <input type="hidden" name="costOverrideJpy" value={overrideCur === "JPY" && overrideUsd !== "" ? override : ""} />
-                {!single && overrideCur === "JPY" && overrideUsd !== "" && (
-                  <p className="mt-1 text-xs text-slate-400">≈ ${overrideUsd} at ¥{rate.toFixed(1)}/$1</p>
-                )}
-              </div>
-              <div className="sm:col-span-2">
-                <label className="label">Notes</label>
-                <input name="notes" defaultValue={data.notes ?? ""} className="input" />
-              </div>
-              <div className="flex items-end gap-2">
-                <button className="btn-primary">Save</button>
-              </div>
-            </form>
+            <ItemEditForm data={data} rate={rate} m={m} />
             <p className="mt-2 text-xs text-slate-400">
               Same SKU = one product, so renaming here updates the whole group (every condition) — you only manage the name once.
               {tracksCondition(category) && " Condition splits the sales history so comps stay accurate."}

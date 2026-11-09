@@ -15,6 +15,7 @@ import { rebalanceBundles } from "./bundles";
 import { UPLOAD_DIR, encodePhoto, isPhotoId, isStoredPhoto, photoPath, parsePhotoFileName } from "./uploads";
 import { parseEntryDate, todayDay, isValidTz } from "./tz";
 import { getUserTz } from "./usertz";
+import { getFxRate } from "./fx";
 
 /** A typed date as a calendar day; blank or unreadable → today in the user's timezone. */
 async function entryDay(userId: string, raw: FormDataEntryValue | null): Promise<Date> {
@@ -662,13 +663,21 @@ export async function updateLot(fd: FormData) {
   data.purchasedAtApprox = fd.get("purchasedAtApprox") != null;
   if (fd.has("costUsd")) data.costUsd = num(fd.get("costUsd")) ?? 0;
   if (fd.has("costJpy")) data.costJpy = num(fd.get("costJpy"));
+  // Yen-only entry: derive USD from the yen at the purchase's locked rate
+  // (USD per JPY), else today's rate.
+  if (fd.has("costFromJpy") && fd.has("costJpy")) {
+    const yen = num(fd.get("costJpy"));
+    const usdPerJpy = lot.fxRate ?? 1 / (await getFxRate(user.id)).rate;
+    data.costUsd = yen == null ? 0 : Math.round(yen * usdPerJpy * 100) / 100;
+    if (yen != null && lot.fxRate == null) data.fxRate = usdPerJpy;
+  }
   if (fd.has("taxUsd")) data.taxUsd = num(fd.get("taxUsd")) ?? 0;
   if (fd.has("taxJpy")) data.taxJpy = num(fd.get("taxJpy"));
   if (fd.has("notes")) data.notes = str(fd.get("notes")) || null;
   if (fd.has("location")) data.locationId = await resolveLocation(user.id, str(fd.get("location")));
 
   await prisma.purchase.update({ where: { id }, data });
-  await setFlash("Lot updated");
+  await setFlash(lot.kind === "LOT" ? "Lot updated" : "Purchase updated");
   await rebalanceBundles(user.id);
   revalidateAll();
 }

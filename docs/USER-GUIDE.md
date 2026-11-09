@@ -167,11 +167,19 @@ another product, so their sales history isn't split in two:
 
 - **Filter by status:** All · In stock · Unlisted · Listed · Sold · Lost/damaged
 - **Filters** button: narrow by category, condition, location, missing info, and more
-- **By item / By product**: see each copy separately, or grouped by product with stock counts
+- **By item / By product**: see each copy separately, or grouped by product with stock counts.
+  Click a product to open its page, which lists every unit you've had of it (purchase date,
+  where it came from, cost, sale) with an **Edit** link for each one
 - **Search** by name or SKU
 - **Edit** on any row: change status, category, condition, barcode, estimated value, cost override or notes
 - **Bulk edit**: tick several rows and change them all at once
-- **Item page**: click an item's name to add **photos** and see its full **profit breakdown**
+- **Item page**: click an item's name to add **photos**, see its full **profit breakdown**, and edit
+  everything about it:
+  - **Item details**: the same fields as the row editor
+  - **Purchase details**: purchase date (and the best-guess flag), source, location, and for a
+    single purchase what you paid. For an item from a lot, these details belong to the whole
+    lot, so saving changes them for every item in it (the lot's cost stays on the lot page)
+  - **Units of this product**: if you have more than one, pick which unit to view or edit
 
 **When you list something** on eBay or Mercari, set its status to **Listed** so the dashboard knows
 what's for sale. **Lost or broken?** Set **Lost (write-off)** or **Damaged (write-off)**. Its cost

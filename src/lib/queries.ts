@@ -261,10 +261,66 @@ export async function getItemDetail(userId: string, itemId: string) {
 
   const dateApprox = lot.purchasedAtApprox;
 
-  return { item, lot, fin, sale, fees, expenses, daysToSell, daysInStock, dateApprox, variantSold, variantAvgDaysToSell, tracksCond };
+  // Every unit of the same product, for the "pick which one to edit" switcher.
+  const units = item.productId ? await getProductUnits(userId, item.productId, bundle) : [];
+
+  return { item, lot, fin, sale, fees, expenses, daysToSell, daysInStock, dateApprox, variantSold, variantAvgDaysToSell, tracksCond, units };
 }
 
 /** All of a user's saved sourcing locations (for pickers + the Locations page). */
+/** One unit (item) of a product, with its purchase + sale context. */
+export interface ProductUnit {
+  id: string;
+  title: string;
+  condition: string | null;
+  status: "UNLISTED" | "LISTED" | "SOLD" | "LOST" | "DAMAGED";
+  purchaseId: string;
+  purchaseTitle: string;
+  isLot: boolean;
+  source: string;
+  purchasedAt: Date;
+  purchasedAtApprox: boolean;
+  allocatedCost: number;
+  gross: number;
+  net: number | null;
+  soldAt: Date | null;
+  thumbId: string | null;
+}
+
+/**
+ * Every unit of a product (all conditions), newest purchase first. Reuses an
+ * already-loaded financials bundle when given.
+ */
+export async function getProductUnits(userId: string, productId: string, bundle?: FinancialsBundle): Promise<ProductUnit[]> {
+  const b = bundle ?? (await getFinancials(userId));
+  const soldAt = new Map<string, Date>();
+  for (const s of b.sales) for (const l of s.lines) soldAt.set(l.itemId, s.soldAt);
+  const units: ProductUnit[] = [];
+  for (const p of b.purchases)
+    for (const i of p.items) {
+      if (i.productId !== productId) continue;
+      const f = b.itemFin.get(i.id);
+      units.push({
+        id: i.id,
+        title: i.title,
+        condition: i.condition,
+        status: i.status,
+        purchaseId: p.id,
+        purchaseTitle: p.title,
+        isLot: p.kind === "LOT",
+        source: p.source,
+        purchasedAt: p.purchasedAt,
+        purchasedAtApprox: p.purchasedAtApprox,
+        allocatedCost: f?.allocatedCost ?? 0,
+        gross: f?.gross ?? 0,
+        net: f?.sold || i.status === "LOST" || i.status === "DAMAGED" ? f?.net ?? null : null,
+        soldAt: soldAt.get(i.id) ?? null,
+        thumbId: i.photos[0]?.id ?? null
+      });
+    }
+  return units.sort((a, b2) => +b2.purchasedAt - +a.purchasedAt || a.id.localeCompare(b2.id));
+}
+
 export async function listLocations(userId: string) {
   return prisma.location.findMany({ where: { userId }, orderBy: { name: "asc" } });
 }

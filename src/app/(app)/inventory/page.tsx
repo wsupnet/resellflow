@@ -329,7 +329,10 @@ export default async function InventoryPage(
                             ) : (
                               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-300">▦</span>
                             )}
-                            <Link href={`/inventory?view=items&q=${encodeURIComponent(g.baseName)}`} className="font-medium text-slate-800 hover:text-brand-700">
+                            <Link
+                              href={g.productId ? `/products/${g.productId}` : `/inventory?view=items&q=${encodeURIComponent(g.baseName)}`}
+                              className="font-medium text-slate-800 hover:text-brand-700"
+                            >
                               {g.baseName}
                             </Link>
                             {g.productId && <ProductRename productId={g.productId} name={g.baseName} />}
