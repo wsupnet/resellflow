@@ -12,6 +12,8 @@ bump `package.json` to match when you add one.
 - **Edit purchase details from the item page**: change an item's purchase date, best-guess flag, source, location and (for single buys) what you paid, right on its page. For an item from a lot, the change applies to the whole lot.
 - **Pick which unit to edit**: if you have more than one of something, the item page lists every unit so you can pick the right one. Clicking a product in Inventory → By product opens a new product page listing every unit.
 - **Timezone setting**: Settings now has a timezone, filled in from your browser. It decides what "today" is when you leave a date blank, and where days, months and years start in reports.
+- **See what's behind a product's numbers**: on Analytics → Insights, click a product (its name or its bar) to see every sale behind it: what you paid, its share of a lot, each fee and expense, and how the net and ROI were worked out.
+- **Settings, reorganised**: Settings is split into clear sections (fees, currency, preferences, privacy, data, account and more) with a menu down the side. Each section saves on its own.
 - **Deal checker shows sold items only**: the search only lists products you've actually sold, so every result has real sale history behind it.
 - **What's new**: this popup. After each update you'll see what changed, once.
 
