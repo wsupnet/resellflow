@@ -71,6 +71,10 @@ Do this once, before you record sales, so fees are calculated correctly.
      about once an hour from open.er-api.com (a free exchange-rate service). Off by default: when
      it's off, nothing is sent anywhere.
    - **Theme**: Light, Off-white, Dark, or follow your device
+   - **Timezone**: filled in from your browser the first time you sign in; change it any time
+     (**Use this device's** switches to the device you're on). It decides what "today" is when you
+     leave a date blank, and where days, months and years start for the dashboard and reports. Dates
+     you type in always stay exactly the day you picked.
 4. Optional: **Look up unknown barcodes online.** Barcodes you've scanned before always fill in
    from your own catalog, privately. With this on, a barcode that isn't in your catalog is also
    sent to OpenLibrary (books), MusicBrainz (music) and UPCitemdb (retail) to suggest a name. Off by

@@ -1,4 +1,6 @@
 import { getSessionUser } from "@/lib/auth";
+import { getUserTz } from "@/lib/usertz";
+import { todayYmd, ymdInTz } from "@/lib/tz";
 import { getFinancials, yenView } from "@/lib/queries";
 import { toView } from "@/lib/format";
 import { prisma } from "@/lib/db";
@@ -50,6 +52,7 @@ function toCsv(headers: string[], rows: (unknown[])[]): string {
 export async function GET(req: Request) {
   const user = await getSessionUser();
   if (!user) return new Response("unauthorized", { status: 401 });
+  const tz = await getUserTz(user.id);
 
   const type = new URL(req.url).searchParams.get("type") ?? "inventory";
 
@@ -79,7 +82,7 @@ export async function GET(req: Request) {
   // Full JSON backup (all records) — handled before the CSV path.
   if (type === "backup") {
     const backup = await fullBackup(user.id);
-    const date = new Date().toISOString().slice(0, 10);
+    const date = todayYmd(tz);
     return new Response(JSON.stringify(backup, null, 2), {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
@@ -100,7 +103,7 @@ export async function GET(req: Request) {
         if (fp && fs.existsSync(fp)) zip.addLocalFile(fp);
       }
     }
-    const date = new Date().toISOString().slice(0, 10);
+    const date = todayYmd(tz);
     return new Response(new Uint8Array(zip.toBuffer()), {
       headers: {
         "Content-Type": "application/zip",
@@ -132,7 +135,7 @@ export async function GET(req: Request) {
           r2(f?.expense ?? 0),
           i.status === "SOLD" ? r2(f?.net ?? 0) : "",
           i.status === "SOLD" && f?.roi != null ? r2(f.roi * 100) : "",
-          new Date(i.createdAt).toISOString().slice(0, 10)
+          ymdInTz(new Date(i.createdAt), tz)
         ]);
       }
     }
@@ -199,7 +202,7 @@ export async function GET(req: Request) {
     // Realized P&L line items for a period (one row per item sold in range) —
     // the detail behind the Reports page, for an accountant/spreadsheet.
     const sp = new URL(req.url).searchParams;
-    const { start, end } = resolveRange(normalizePeriod(sp.get("period") ?? undefined), sp.get("from") ?? undefined, sp.get("to") ?? undefined);
+    const { start, end } = resolveRange(normalizePeriod(sp.get("period") ?? undefined), sp.get("from") ?? undefined, sp.get("to") ?? undefined, tz);
     const inRange = (d: Date) => d >= start && d <= end;
 
     // Honor the yen/USD view toggle (cookie). Yen columns use the live rate, or each
@@ -242,7 +245,7 @@ export async function GET(req: Request) {
   }
 
   const csv = toCsv(headers, rows);
-  const date = new Date().toISOString().slice(0, 10);
+  const date = todayYmd(tz);
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",

@@ -6,6 +6,7 @@ import { getViewCurrency, getCurrencyPrefs } from "@/lib/money";
 import Nav from "@/components/Nav";
 import Toaster from "@/components/Toaster";
 import ThemeSync from "@/components/ThemeSync";
+import TzSync from "@/components/TzSync";
 import { CurrencyPrefsProvider } from "@/components/CurrencyPrefs";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -13,7 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
   const flash = await readFlash();
   const [currency, prefs] = await Promise.all([getViewCurrency(user.id), getCurrencyPrefs(user.id)]);
-  const settings = await prisma.settings.findUnique({ where: { userId: user.id }, select: { theme: true } });
+  const settings = await prisma.settings.findUnique({ where: { userId: user.id }, select: { theme: true, timezone: true } });
 
   return (
     <div className="min-h-screen">
@@ -23,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </CurrencyPrefsProvider>
       <Toaster flash={flash} />
       <ThemeSync theme={settings?.theme ?? "light"} />
+      <TzSync needed={!settings?.timezone} />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getUserTz } from "@/lib/usertz";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
 import { getFinancials, getMonthlySeries, summarizeLots, totalsYen, yenView } from "@/lib/queries";
@@ -28,7 +29,7 @@ export default async function DashboardPage() {
   const rawPeriod = (await cookies()).get("dashPeriod")?.value;
   const period: Period = rawPeriod ? normalizePeriod(rawPeriod) : "all";
   const allTime = period === "all";
-  const { start, end, label } = resolveRange(period);
+  const { start, end, label } = resolveRange(period, undefined, undefined, await getUserTz(user.id));
   const inRange = (d: Date | string) => {
     const x = +new Date(d);
     return x >= +start && x <= +end;
@@ -145,7 +146,8 @@ export default async function DashboardPage() {
       return { name: name.length > 24 ? name.slice(0, 23) + "…" : name, fullName: name, value: toView(f.net, m, yv?.fin(f.itemId)?.net) };
     });
   const u = moneyUnit(m);
-  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  // Period bounds are calendar-day instants (UTC midnight) — read them in UTC.
+  const monthKey = (d: Date) => d.toISOString().slice(0, 7);
   const chartSeries = series
     .filter((s) => allTime || (s.month >= monthKey(start) && s.month <= monthKey(end)))
     .map((s) => ({ ...s, net: toView(s.net, m, s.netYen), gross: toView(s.gross, m, s.grossYen) }));

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getUserTz } from "@/lib/usertz";
 import { requireUser } from "@/lib/auth";
 import { getReport } from "@/lib/queries";
 import { MonthlyNetChart } from "@/components/Charts";
@@ -18,7 +19,7 @@ export default async function ReportsPage(
   const searchParams = await props.searchParams;
   const user = await requireUser();
   const period = normalizePeriod(searchParams.period);
-  const { start, end, label } = resolveRange(period, searchParams.from, searchParams.to);
+  const { start, end, label } = resolveRange(period, searchParams.from, searchParams.to, await getUserTz(user.id));
   const m = await getMoney(user.id);
   const csvQuery = new URLSearchParams({ type: "report", period, ...(searchParams.from ? { from: searchParams.from } : {}), ...(searchParams.to ? { to: searchParams.to } : {}) }).toString();
   const r = await getReport(user.id, start, end, m.currency === "JPY" && m.mode === "historical" ? { live: m.rate } : undefined);

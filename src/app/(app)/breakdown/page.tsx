@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getUserTz } from "@/lib/usertz";
 import { cookies } from "next/headers";
 import { requireUser } from "@/lib/auth";
 import { getFinancials, yenView } from "@/lib/queries";
@@ -69,7 +70,7 @@ export default async function BreakdownPage(
 
   const metric = (Object.keys(METRIC_INFO).includes(searchParams.metric ?? "") ? searchParams.metric : "realized") as Metric;
   const period: Period = searchParams.period ? normalizePeriod(searchParams.period) : "all";
-  const { start, end, label } = resolveRange(period);
+  const { start, end, label } = resolveRange(period, undefined, undefined, await getUserTz(user.id));
   const inRange = (d: Date | string) => {
     const x = +new Date(d);
     return x >= +start && x <= +end;

@@ -350,8 +350,9 @@ export async function getSeasonality(userId: string, m?: { currency: string; mod
 
   for (const s of bundle.sales) {
     const d = new Date(s.soldAt);
-    const mi = d.getMonth();
-    years.add(d.getFullYear());
+    // Sale dates are calendar days stored at UTC midnight — read them in UTC.
+    const mi = d.getUTCMonth();
+    years.add(d.getUTCFullYear());
     totalSales++;
     for (const l of s.lines) {
       const f = bundle.itemFin.get(l.itemId);

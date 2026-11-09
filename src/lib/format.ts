@@ -67,8 +67,13 @@ export function fmtDeduction(amount: number, m: MoneyCtx, yen?: number): { text:
   return { text: `${isCredit ? "+" : "−"}${fmtMoney(abs, m, absYen)}`, isCredit };
 }
 
+/**
+ * A calendar day (purchase/sale/expense date, stored as UTC midnight of the day
+ * picked) — rendered in UTC so it never shifts a day in the viewer's timezone.
+ * For a real timestamp, convert it first with momentToDay(d, tz) from lib/tz.
+ */
 export const shortDate = (d: Date | string | null | undefined): string =>
-  d == null ? "—" : new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  d == null ? "—" : new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 
 /** Purchase date, prefixed with "~" when it's only a best guess. */
 export const purchaseDate = (p: { purchasedAt: Date | string; purchasedAtApprox?: boolean }): string =>

@@ -8,6 +8,8 @@ import ConfirmButton from "@/components/ConfirmButton";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
 import SignOutEverywhere from "@/components/SignOutEverywhere";
 import { shortDate } from "@/lib/format";
+import TimezoneField from "@/components/TimezoneField";
+import { allTimezones, momentToDay, DEFAULT_TZ, isValidTz } from "@/lib/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,7 @@ export default async function SettingsPage() {
   const user = await requireUser();
   let settings = await prisma.settings.findUnique({ where: { userId: user.id } });
   if (!settings) settings = await prisma.settings.create({ data: { userId: user.id } });
+  const tz = isValidTz(settings.timezone) ? settings.timezone : DEFAULT_TZ;
 
   const invites = user.isAdmin
     ? await prisma.invite.findMany({ orderBy: { createdAt: "desc" } })
@@ -115,6 +118,7 @@ export default async function SettingsPage() {
               How the app looks on every page. System switches with your phone/computer&apos;s light-dark setting automatically.
             </p>
           </div>
+          <TimezoneField value={isValidTz(settings.timezone) ? settings.timezone : null} zones={allTimezones()} />
           <label className="sm:col-span-2 flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm">
             <input type="checkbox" name="upcLookup" defaultChecked={settings.upcLookup} className="mt-0.5" />
             <span>
@@ -189,7 +193,7 @@ export default async function SettingsPage() {
                           <span className="pill bg-emerald-100 text-emerald-700">open</span>
                         )}
                       </td>
-                      <td className="td text-slate-500">{shortDate(inv.createdAt)}</td>
+                      <td className="td text-slate-500">{shortDate(momentToDay(inv.createdAt, tz))}</td>
                       <td className="td text-right">
                         <form action={deleteInvite}>
                           <input type="hidden" name="id" value={inv.id} />

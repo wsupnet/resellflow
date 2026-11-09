@@ -13,6 +13,19 @@ import { setFlash } from "./flash";
 import { likeLiteral, normalizeEmail } from "./email";
 import { rebalanceBundles } from "./bundles";
 import { UPLOAD_DIR, encodePhoto, isPhotoId, isStoredPhoto, photoPath, parsePhotoFileName } from "./uploads";
+import { parseEntryDate, todayDay, isValidTz } from "./tz";
+import { getUserTz } from "./usertz";
+
+/** A typed date as a calendar day; blank or unreadable → today in the user's timezone. */
+async function entryDay(userId: string, raw: FormDataEntryValue | null): Promise<Date> {
+  const tz = await getUserTz(userId);
+  return parseEntryDate(str(raw), tz) ?? todayDay(tz);
+}
+
+/** A typed date for an edit: blank or unreadable keeps the existing value. */
+function editDay(raw: FormDataEntryValue | null, existing: Date): Date {
+  return (str(raw) && parseEntryDate(str(raw), "UTC")) || existing;
+}
 
 export async function clearFlash() {
   (await cookies()).delete("flash");
@@ -109,7 +122,7 @@ export async function createSinglePurchase(fd: FormData) {
       source: isPersonal ? "Personal Belongings" : str(fd.get("source")) || "Other",
       locationId,
       isPersonal,
-      purchasedAt: str(fd.get("purchasedAt")) ? new Date(str(fd.get("purchasedAt"))) : new Date(),
+      purchasedAt: await entryDay(user.id, fd.get("purchasedAt")),
       purchasedAtApprox: fd.get("purchasedAtApprox") != null,
       costUsd: isPersonal ? 0 : num(fd.get("costUsd")) ?? 0,
       costJpy: isPersonal ? null : num(fd.get("costJpy")),
@@ -145,7 +158,7 @@ export async function createLotPurchase(fd: FormData) {
   const user = await requireUser();
   const isPersonal = fd.get("isPersonal") != null;
   const source = isPersonal ? "Personal Belongings" : str(fd.get("source")) || "Other";
-  const purchasedAt = str(fd.get("purchasedAt")) ? new Date(str(fd.get("purchasedAt"))) : new Date();
+  const purchasedAt = await entryDay(user.id, fd.get("purchasedAt"));
 
   // Auto-name the lot when left blank: "<source> lot · <date> #N", still editable.
   let title = str(fd.get("title"));
@@ -256,7 +269,7 @@ export async function createLotDraft(fd: FormData): Promise<{ id: string; title:
   const user = await requireUser();
   const isPersonal = fd.get("isPersonal") != null;
   const source = isPersonal ? "Personal Belongings" : str(fd.get("source")) || "Other";
-  const purchasedAt = str(fd.get("purchasedAt")) ? new Date(str(fd.get("purchasedAt"))) : new Date();
+  const purchasedAt = await entryDay(user.id, fd.get("purchasedAt"));
 
   let title = str(fd.get("title"));
   if (!title) {
@@ -460,7 +473,7 @@ export async function updateItem(fd: FormData) {
       data.status = status;
       // Stamp/clear the write-off date so reports recognize the loss in the right period.
       if (WRITE_OFF.includes(status)) {
-        if (!WRITE_OFF.includes(item.status)) data.writtenOffAt = new Date();
+        if (!WRITE_OFF.includes(item.status)) data.writtenOffAt = todayDay(await getUserTz(user.id));
       } else if (item.writtenOffAt) {
         data.writtenOffAt = null;
       }
@@ -517,7 +530,7 @@ export async function bulkUpdateItems(fd: FormData) {
   if (isWriteOff) {
     const res = await prisma.item.updateMany({
       where: { id: { in: ids }, userId: user.id, status: { not: "SOLD" } },
-      data: { status: status as "LOST" | "DAMAGED", writtenOffAt: new Date() }
+      data: { status: status as "LOST" | "DAMAGED", writtenOffAt: todayDay(await getUserTz(user.id)) }
     });
     count = Math.max(count, res.count);
   }
@@ -645,7 +658,7 @@ export async function updateLot(fd: FormData) {
   if (title) data.title = title;
   const source = str(fd.get("source"));
   if (source) data.source = source;
-  if (str(fd.get("purchasedAt"))) data.purchasedAt = new Date(str(fd.get("purchasedAt")));
+  if (str(fd.get("purchasedAt"))) data.purchasedAt = editDay(fd.get("purchasedAt"), lot.purchasedAt);
   data.purchasedAtApprox = fd.get("purchasedAtApprox") != null;
   if (fd.has("costUsd")) data.costUsd = num(fd.get("costUsd")) ?? 0;
   if (fd.has("costJpy")) data.costJpy = num(fd.get("costJpy"));
@@ -713,7 +726,7 @@ export async function recordSale(fd: FormData) {
       data: {
         userId: user.id,
         platform,
-        soldAt: str(fd.get("soldAt")) ? new Date(str(fd.get("soldAt"))) : new Date(),
+        soldAt: await entryDay(user.id, fd.get("soldAt")),
         fxRate: num(fd.get("fxRate")),
         shippingFee: num(fd.get("shippingFee")) ?? 0,
         ebayFee: num(fd.get("ebayFee")) ?? 0,
@@ -770,7 +783,7 @@ export async function updateSale(fd: FormData) {
     where: { id },
     data: {
       platform,
-      soldAt: str(fd.get("soldAt")) ? new Date(str(fd.get("soldAt"))) : sale.soldAt,
+      soldAt: editDay(fd.get("soldAt"), sale.soldAt),
       // Fee fields are pre-filled with current values, so a cleared field means 0.
       shippingFee,
       ebayFee,
@@ -915,7 +928,7 @@ export async function createExpense(fd: FormData) {
       description: str(fd.get("description")) || null,
       amountUsd: num(fd.get("amountUsd")) ?? 0,
       amountJpy: num(fd.get("amountJpy")),
-      date: str(fd.get("date")) ? new Date(str(fd.get("date"))) : new Date(),
+      date: await entryDay(user.id, fd.get("date")),
       ...attach
     }
   });
@@ -937,7 +950,7 @@ export async function updateExpense(fd: FormData) {
       description: str(fd.get("description")) || null,
       amountUsd: num(fd.get("amountUsd")) ?? existing.amountUsd,
       amountJpy: num(fd.get("amountJpy")),
-      date: str(fd.get("date")) ? new Date(str(fd.get("date"))) : existing.date,
+      date: editDay(fd.get("date"), existing.date),
       ...attach
     }
   });
@@ -1045,6 +1058,7 @@ export async function importInventoryCsv(fd: FormData): Promise<ImportResult> {
   if (!file || file.size === 0) return { created: 0, skipped: [], error: "No file selected" };
   const { parseCsvObjects } = await import("./csv");
   const rows = parseCsvObjects(await file.text());
+  const tz = await getUserTz(user.id);
 
   let created = 0;
   const skipped: string[] = [];
@@ -1071,7 +1085,7 @@ export async function importInventoryCsv(fd: FormData): Promise<ImportResult> {
         source: o.source || "Imported",
         isPersonal,
         locationId,
-        purchasedAt: o.purchasedat || o.addedat || o.date ? new Date(o.purchasedat || o.addedat || o.date) : new Date(),
+        purchasedAt: parseEntryDate(o.purchasedat || o.addedat || o.date, tz) ?? todayDay(tz),
         purchasedAtApprox: /^(y|yes|true|1|approx)/i.test(o.dateapprox || ""),
         costUsd: isPersonal ? 0 : num(o.costusd) ?? 0,
         costJpy: isPersonal ? null : num(o.costjpy),
@@ -1095,6 +1109,7 @@ export async function importSalesCsv(fd: FormData): Promise<ImportResult> {
   if (!file || file.size === 0) return { created: 0, skipped: [], error: "No file selected" };
   const { parseCsvObjects } = await import("./csv");
   const rows = parseCsvObjects(await file.text());
+  const tz = await getUserTz(user.id);
 
   const items = await prisma.item.findMany({
     where: { userId: user.id, status: { not: "SOLD" } },
@@ -1125,7 +1140,7 @@ export async function importSalesCsv(fd: FormData): Promise<ImportResult> {
         data: {
           userId: user.id,
           platform: platformFrom(o.platform || ""),
-          soldAt: o.date || o.soldat ? new Date(o.date || o.soldat) : new Date(),
+          soldAt: parseEntryDate(o.date || o.soldat, tz) ?? todayDay(tz),
           shippingFee: num(o.shipping ?? o.shippingfee) ?? 0,
           ebayFee: num(o.ebayfee) ?? 0,
           mercariFee: num(o.mercarifee) ?? 0,
@@ -1244,7 +1259,7 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
       // are still the untouched defaults (a new account, e.g. moving to a fresh
       // install). Settings someone has already changed are never overwritten.
       if (d.settings) {
-        const restored = settingsFromBackup(d.settings);
+        const restored = { ...settingsFromBackup(d.settings), ...(isValidTz(d.settings.timezone) ? { timezone: d.settings.timezone as string } : {}) };
         const current = await tx.settings.findUnique({ where: { userId: uid } });
         if (!current) {
           await tx.settings.create({ data: { userId: uid, ...restored } });
@@ -1458,6 +1473,8 @@ export async function updateSettings(fd: FormData) {
   const manualRate = num(fd.get("fxManualRate"));
   const fxManualRate = manualRate != null && manualRate > 0 && manualRate < 10000 ? manualRate : undefined;
   const theme = ["light", "cream", "dark", "system"].includes(str(fd.get("theme"))) ? str(fd.get("theme")) : "light";
+  // Only touched when the form sends a valid zone; otherwise the saved one stays.
+  const timezone = isValidTz(str(fd.get("timezone"))) ? str(fd.get("timezone")) : undefined;
   // The root layout renders the theme from this cookie (no flash of wrong theme).
   (await cookies()).set("theme", theme, { path: "/", maxAge: 31536000, sameSite: "lax" });
   await prisma.settings.upsert({
@@ -1474,7 +1491,8 @@ export async function updateSettings(fd: FormData) {
       fxMode,
       fxLive,
       fxManualRate,
-      theme
+      theme,
+      timezone
     },
     create: {
       userId: user.id,
@@ -1489,11 +1507,27 @@ export async function updateSettings(fd: FormData) {
       fxMode,
       fxLive,
       fxManualRate,
-      theme
+      theme,
+      timezone
     }
   });
   await setFlash("Settings saved");
   revalidatePath("/settings");
+}
+
+/**
+ * First-visit auto-detect: saves the browser's timezone, but only while none is
+ * set yet — a zone the user picked in Settings is never overwritten.
+ */
+export async function detectTimezone(tz: string) {
+  const user = await requireUser();
+  if (!isValidTz(tz)) return;
+  await prisma.settings.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: { userId: user.id, timezone: tz }
+  });
+  await prisma.settings.updateMany({ where: { userId: user.id, timezone: null }, data: { timezone: tz } });
 }
 
 /** Change the signed-in user's password. Signs out every other session (by

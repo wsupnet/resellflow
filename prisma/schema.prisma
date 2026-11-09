@@ -74,6 +74,11 @@ model Settings {
 
   // UI theme: "light" | "cream" | "dark" | "system" (follows device preference).
   theme           String  @default("light")
+
+  // IANA timezone (e.g. "America/Los_Angeles"). Decides what "today" is for
+  // blank date fields and report periods, and how timestamps display. Null until
+  // set — the app fills it from the browser on the first visit (see TzSync).
+  timezone        String?
 }
 
 // ─────────────────────────── Sourcing ───────────────────────────

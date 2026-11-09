@@ -95,7 +95,7 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
     else trend = { tone: "flat", text: `Selling about usual (recent avg ${money(selected.recentAvg)}).` };
   }
 
-  const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
+  const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "");
 
   return (
     <div className="space-y-6">

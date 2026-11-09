@@ -29,6 +29,7 @@ export interface ItemRowData {
   yen?: { allocatedCost: number; gross: number; net: number }; // Historical-mode yen at locked rates
   timesSold: number;
   addedAt: string;
+  addedDay?: string;
   daysInStock: number | null; // days sitting unsold (in-stock items only)
   sku: string | null;
   category: string | null;
@@ -131,7 +132,7 @@ export default function ItemRow({
           </div>
         </td>
         <td className="td" data-label="Status"><StatusPill status={data.status} /></td>
-        <td className="td whitespace-nowrap text-slate-500" data-label="Added">{shortDate(data.addedAt)}</td>
+        <td className="td whitespace-nowrap text-slate-500" data-label="Added">{shortDate(data.addedDay ?? data.addedAt)}</td>
         <td className="td" data-label="Cost">
           {fmtMoney(data.allocatedCost, m, data.yen?.allocatedCost)}
           {data.costOverrideJpy != null && <span className="ml-1 text-xs text-slate-400">¥{data.costOverrideJpy.toLocaleString()}</span>}

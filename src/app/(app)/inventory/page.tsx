@@ -17,6 +17,8 @@ import { resolvePer, paginate } from "@/lib/paginate";
 import { SectionTitle } from "@/components/ui";
 import { fmtMoney } from "@/lib/format";
 import { getMoney } from "@/lib/money";
+import { getUserTz } from "@/lib/usertz";
+import { momentToDay } from "@/lib/tz";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,7 @@ export default async function InventoryPage(
 ) {
   const searchParams = await props.searchParams;
   const user = await requireUser();
+  const tz = await getUserTz(user.id);
   const [bundle, fx, locations, m] = await Promise.all([getFinancials(user.id), getFxRate(user.id), listLocations(user.id), getMoney(user.id)]);
   const yv = yenView(bundle, m); // Historical-mode yen, else null
   const locationNames = locations.map((l) => l.name);
@@ -207,6 +210,7 @@ export default async function InventoryPage(
         yen: yv ? { allocatedCost: yv.fin(i.id)?.allocatedCost ?? 0, gross: yv.fin(i.id)?.gross ?? 0, net: yv.fin(i.id)?.net ?? 0 } : undefined,
         timesSold: i.productId ? soldByVariant.get(variantKey(i.productId, i.product?.category, i.condition)) ?? 0 : 0,
         addedAt: i.createdAt.toISOString(),
+        addedDay: momentToDay(i.createdAt, tz).toISOString(), // the day it was added, in the user's timezone
         // Days sitting unsold, from the purchase date — only meaningful in stock.
         daysInStock: (i.status === "UNLISTED" || i.status === "LISTED") && !p.purchasedAtApprox ? daysUnsold(p.purchasedAt) : null,
         sku: i.product?.sku ?? null,
