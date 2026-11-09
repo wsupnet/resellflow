@@ -7,6 +7,13 @@ Format: one `## <version> — <date>` heading per release (newest first), then
 `- **Title**: description` bullets. The newest heading is the app's version, so
 bump `package.json` to match when you add one.
 
+## 0.3.0 — 2026-11-09
+
+- **Product families**: group different products that are really the same thing, like the US and Japan releases of an album or the colours of a console. Each keeps its own barcode and profits; the family shows them side by side with combined totals ("sold 5 across US, Japan, Mexico"). Find them under **Inventory → By family**.
+- **Family suggestions**: the app spots products with matching names (for example "New 3DS LL - Blue" and "NEW 3DS LL - Burgundy") and offers to group them. Accept, rename, or say **Not a family**.
+- **Families in Insights**: switch Insights to **Families** to rank each family as one combined row.
+- **Deal Checker uses family sales**: scan a version you've never sold, and if another version in its family has sold, you can use that as the benchmark for a verdict.
+
 ## 0.2.1 — 2026-11-09
 
 - **Tidier Settings**: the long explanations are gone. Hover over or tap the **?** next to a setting to see what it does.

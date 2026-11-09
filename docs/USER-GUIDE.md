@@ -189,6 +189,21 @@ another product, so their sales history isn't split in two:
     lot, so saving changes them for every item in it (the lot's cost stays on the lot page)
   - **Units of this product**: if you have more than one, pick which unit to view or edit
 
+**Product families.** Some products are really the same thing in different versions: the US and
+Japan releases of an album, or the colours of a console. Their barcodes differ, so they stay separate
+products, each with its own stock and profits. A **family** links them so you can see them together.
+
+- **Make one:** on a product's page, use **Family → Add to family** (pick a family or name a new one,
+  and give this product a version label such as "Japan release" or "Burgundy"). Or, in **By product**,
+  tick several products and choose **Group into family**.
+- **Suggestions:** **Inventory → By family** lists products whose names match apart from words like
+  US / Japan / Blue, and offers to group them. Accept (rename it if you like) or choose **Not a family**,
+  and it won't suggest those again. A product's page shows the same hint.
+- **See it:** **By family** lists every family; click one for its page, with each version's stock,
+  sales, net, ROI and days to sell side by side, a combined total row, and a line such as "sold 5
+  across US release, Japan release, Mexico". You can edit labels, remove a product, rename or delete
+  the family there. Deleting a family only unlinks its products.
+
 **When you list something** on eBay or Mercari, set its status to **Listed** so the dashboard knows
 what's for sale. **Lost or broken?** Set **Lost (write-off)** or **Damaged (write-off)**. Its cost
 still counts against your profit, which keeps the numbers honest.
@@ -280,6 +295,8 @@ For deeper analysis, open **Analytics**:
   every sale behind the row, showing what you paid (and, for a lot, the lot total and how this item's
   share was worked out), what it sold for, each fee and expense, and the net and ROI math. It opens
   on the same condition and the same Individual-only choice, so the totals match the row you clicked.
+  Switch **Products / Families** to **Families** to rank each product family as one row, with every
+  version's sales combined (products without a family stay as their own rows).
 - **Trends**: which month each category sells best in
 
 ---
@@ -309,6 +326,10 @@ Standing in a store wondering whether something is worth buying? Open **Deal Che
 If the market has moved, look up recent sold prices (eBay sold listings, 130point, and so on), then
 use **Set manual comp (sold price) → Save comp** on that product. The Deal Checker uses your comp
 from then on.
+
+**Never sold this version, but another version in its family has?** It shows up anyway, with the
+family's other versions listed underneath (times sold, average sale). Tap **Use as benchmark** on
+one to get a verdict based on it. The verdict notes that it's based on a different version.
 
 **Never sold one before, or scanned something new?** It won't show up here until you've sold one,
 because there's no history to compare against. Add it in **Inventory** so its history starts

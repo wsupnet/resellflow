@@ -18,6 +18,10 @@ import { SectionTitle } from "@/components/ui";
 import { fmtMoney } from "@/lib/format";
 import { getMoney } from "@/lib/money";
 import { getUserTz } from "@/lib/usertz";
+import { prisma } from "@/lib/db";
+import { listFamilies, familySuggestions } from "@/lib/families";
+import FamiliesList from "@/components/FamiliesList";
+import { groupIntoFamily } from "@/lib/actions";
 import { momentToDay } from "@/lib/tz";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +48,7 @@ export default async function InventoryPage(
         soldByVariant.set(k, (soldByVariant.get(k) ?? 0) + 1);
       }
 
-  const view = searchParams.view === "product" ? "product" : "items";
+  const view = searchParams.view === "product" ? "product" : searchParams.view === "family" ? "family" : "items";
   const statusFilter = (searchParams.status ?? "").toUpperCase();
   const sourceFilter = searchParams.source ?? "";
   const typeFilter = searchParams.type ?? "";
@@ -92,7 +96,7 @@ export default async function InventoryPage(
   //    products carry an in-stock breakdown by condition (rolled up, not split). ──
   const productGroups = new Map<
     string,
-    { baseName: string; productId: string | null; sku: string | null; tracks: boolean; inStock: number; listed: number; sold: number; costTiedUp: number; saleSum: number; costTiedUpYen: number; saleSumYen: number; thumbId: string | null; condInStock: Map<string, number> }
+    { baseName: string; productId: string | null; familyId: string | null; familyLabel: string | null; sku: string | null; tracks: boolean; inStock: number; listed: number; sold: number; costTiedUp: number; saleSum: number; costTiedUpYen: number; saleSumYen: number; thumbId: string | null; condInStock: Map<string, number> }
   >();
   for (const { i } of base) {
     const tracks = tracksCondition(i.product?.category ?? null);
@@ -103,6 +107,8 @@ export default async function InventoryPage(
       {
         baseName,
         productId: i.productId ?? null,
+        familyId: i.product?.familyId ?? null,
+        familyLabel: i.product?.familyLabel ?? null,
         sku: i.product?.sku ?? null,
         tracks,
         inStock: 0, listed: 0, sold: 0, costTiedUp: 0, saleSum: 0, costTiedUpYen: 0, saleSumYen: 0, thumbId: null,
@@ -259,6 +265,12 @@ export default async function InventoryPage(
   };
   const viewParams = (v: string) => linkParams({ view: v });
 
+  // Families: names for the product rows' family tag + the By family view.
+  const allFamilies = await prisma.family.findMany({ where: { userId: user.id }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const familyName = new Map(allFamilies.map((f) => [f.id, f.name]));
+  const [familyRows, suggestions] =
+    view === "family" ? await Promise.all([listFamilies(user.id, bundle), familySuggestions(user.id)]) : [[], []];
+
   return (
     <div className="space-y-6">
       <SubNav items={[{ href: "/inventory", label: "Items" }, { href: "/lots", label: "Lots" }]} />
@@ -273,7 +285,7 @@ export default async function InventoryPage(
 
         <div className="card">
           <SectionTitle action={<SearchBox placeholder="Search name or SKU…" />}>
-            {view === "product" ? `In stock by product (${products.length})` : `Items (${rows.length})`}
+            {view === "product" ? `In stock by product (${products.length})` : view === "family" ? `Families (${familyRows.length})` : `Items (${rows.length})`}
           </SectionTitle>
 
           {/* View toggle */}
@@ -283,6 +295,9 @@ export default async function InventoryPage(
             </Link>
             <Link scroll={false} href={`/inventory?${viewParams("product")}`} className={`rounded-lg px-3 py-1 font-medium ${view === "product" ? "bg-brand-50 text-brand-700" : "text-slate-500 hover:bg-slate-100"}`}>
               By product (stock)
+            </Link>
+            <Link scroll={false} href="/inventory?view=family" className={`rounded-lg px-3 py-1 font-medium ${view === "family" ? "bg-brand-50 text-brand-700" : "text-slate-500 hover:bg-slate-100"}`}>
+              By family
             </Link>
           </div>
 
@@ -299,17 +314,32 @@ export default async function InventoryPage(
                 })}
               </div>
             )}
-            <InventoryFilters view={view} sources={sources} locations={locations.map((l) => ({ id: l.id, name: l.name }))} />
+            {view !== "family" && <InventoryFilters view={view} sources={sources} locations={locations.map((l) => ({ id: l.id, name: l.name }))} />}
           </div>
 
-          {view === "product" ? (
+          {view === "family" ? (
+            <FamiliesList families={familyRows} suggestions={suggestions} m={m} />
+          ) : view === "product" ? (
             products.length === 0 ? (
               <p className="py-8 text-center text-sm text-slate-500">No products match.</p>
             ) : (
               <div className="overflow-x-auto">
+                {/* Tick products, then group them into a family (checkboxes join this form via form=). */}
+                <form id="family-group" action={groupIntoFamily} className="mb-3 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2 text-sm">
+                  <div>
+                    <label className="label">Group ticked products into</label>
+                    <select name="familyId" defaultValue="new" className="input py-1.5 text-sm">
+                      <option value="new">— new family —</option>
+                      {allFamilies.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                  </div>
+                  <input name="newFamilyName" className="input py-1.5 text-sm" placeholder="new family name" aria-label="New family name" />
+                  <button className="btn-ghost py-1.5 text-sm">Group into family</button>
+                </form>
                 <table className="min-w-full rtable">
                   <thead>
                     <tr className="border-b border-slate-100">
+                      <th className="th w-8 hidden md:table-cell"><span className="sr-only">Select</span></th>
                       <SortableTh field="name">Product</SortableTh>
                       <SortableTh field="stock">In stock</SortableTh>
                       <SortableTh field="listed">Listed</SortableTh>
@@ -321,6 +351,9 @@ export default async function InventoryPage(
                   <tbody>
                     {pgProducts.rows.map((g) => (
                       <tr key={g.productId ?? g.baseName} className="border-b border-slate-50 hover:bg-slate-50/60">
+                        <td className="td w-8 hidden md:table-cell">
+                          {g.productId && <input type="checkbox" name="productId" value={g.productId} form="family-group" aria-label={`Select ${g.baseName}`} />}
+                        </td>
                         <td className="td cell-main" data-label="">
                           <div className="flex items-center gap-2">
                             {g.thumbId ? (
@@ -336,6 +369,11 @@ export default async function InventoryPage(
                               {g.baseName}
                             </Link>
                             {g.productId && <ProductRename productId={g.productId} name={g.baseName} />}
+                            {g.familyId && familyName.has(g.familyId) && (
+                              <Link href={`/families/${g.familyId}`} className="pill bg-indigo-50 text-indigo-700 hover:bg-indigo-100" title="Family">
+                                {familyName.get(g.familyId)}{g.familyLabel ? ` · ${g.familyLabel}` : ""}
+                              </Link>
+                            )}
                           </div>
                           {(() => {
                             const parts = [...g.condInStock.entries()].filter(([, n]) => n > 0);

@@ -82,6 +82,9 @@ sales add up to it, so there are no mystery totals.
   apply to the whole lot)
 - Each product gets a page listing every unit you've had of it, so with several copies you can
   pick which one to open or edit
+- **Product families** link different products that are the same thing in different versions (US
+  vs Japan release, colour variants). Each keeps its own profits; the family page shows them side
+  by side with combined totals, and the app suggests families from matching names
 
 ### 🧺 Lots & purchases
 
@@ -113,7 +116,8 @@ sales add up to it, so there are no mystery totals.
 - **Insights: "what to buy more of."** Ranks products by a blended score, or by total profit,
   ROI, how often they sell, or how fast. Bundle sales are tagged and can be filtered out, and an
   ROI needs 3+ sales before it can top the list. Click any product to see every sale behind its
-  numbers: purchase price, lot share, fees, expenses and the ROI math
+  numbers: purchase price, lot share, fees, expenses and the ROI math. A **Families** switch ranks
+  each product family as one combined row
 
   ![Insights](screenshots/desktop-insights.png)
 
@@ -131,6 +135,7 @@ sales add up to it, so there are no mystery totals.
 - Prices show in whichever currency you're viewing
 - Enter the asking price (in **dollars or yen**) for a verdict from *"Buy it 🔥"* down to *"Rethink it"*,
   based on your real sale history, or a comp price you paste in to override it
+- Never sold this version? If another version in its family has sold, use it as the benchmark
 
 ### 🧾 General ledger
 

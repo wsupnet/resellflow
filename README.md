@@ -35,7 +35,12 @@ Facebook. Built to solve the things a spreadsheet can't:
 - **Buy-more insights.** Ranks what you should source more of by a blended score,
   with toggles to view by total profit, ROI, or how often it sells. Bundle sales
   are tagged, an **Individual only** filter leaves them out, and ROI needs 3+ sales
-  before it can top the rankings.
+  before it can top the rankings. A **Families** switch ranks product families
+  as one row each.
+- **Product families.** Link products that are the same thing in different
+  versions (US / Japan releases, colour variants) to see them side by side with
+  combined totals, while each keeps its own profits. Name-based suggestions help
+  you set them up.
 - **Barcode / SKU grouping + camera scanning.** Scan a barcode with your phone
   camera (or type it) to tag any item; items sharing a code are treated as one
   product so the "times sold" count is accurate even when names differ. A lot's

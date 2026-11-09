@@ -21,7 +21,13 @@ export interface DealProduct {
   recentAvg: number | null;
   lastSalePrice: number | null;
   lastSaleDate: string | null;
+  familyId: string | null;
+  familyName: string | null;
+  familyLabel: string | null; // this version within its family ("Japan release")
 }
+
+/** How a family member is named in the reference list. */
+const versionName = (p: DealProduct) => p.familyLabel || p.name;
 
 export default function DealChecker({ products, rate, defaultCurrency = "USD" }: { products: DealProduct[]; rate: number; defaultCurrency?: "USD" | "JPY" }) {
   const { single } = useCurrencyPrefs();
@@ -46,6 +52,8 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
   const [priceCur, setPriceCur] = useState<"USD" | "JPY">(defaultCurrency);
 
   const [scanMsg, setScanMsg] = useState("");
+  // Never-sold version: which family member stands in as the benchmark.
+  const [refKey, setRefKey] = useState<string | null>(null);
 
   const matches = useMemo(() => {
     if (!query) return [];
@@ -58,7 +66,12 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
     if (hits.length === 1) {
       setSelected(hits[0]);
       setQuery(hits[0].name);
-      setScanMsg(`Matched by SKU — you've sold this ${hits[0].timesSold}× before.`);
+      setRefKey(null);
+      setScanMsg(
+        hits[0].timesSold > 0
+          ? `Matched by SKU — you've sold this ${hits[0].timesSold}× before.`
+          : `Matched by SKU — you haven't sold this version yet, but other versions in its family have sold.`
+      );
     } else if (hits.length > 1) {
       // Same barcode, multiple conditions — let them pick which one.
       setSelected(null);
@@ -73,9 +86,24 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
 
   const buyUsd = price === "" ? null : priceCur === "USD" ? Number(price) : Number(price) / rate;
 
-  // Benchmark = manual comp if set, else your average sale price.
-  const benchmark = selected ? (selected.compPrice ?? selected.avgSalePrice) : null;
-  const benchmarkSource = selected?.compPrice != null ? "your comp" : "your avg sale price";
+  // Other versions in the same family that have sold (the reference for a never-sold version).
+  const familyRefs =
+    selected && selected.timesSold === 0 && selected.familyId
+      ? products.filter((p) => p.familyId === selected.familyId && p.timesSold > 0 && p.key !== selected.key)
+      : [];
+  const ref = familyRefs.find((p) => p.key === refKey) ?? null;
+
+  // Benchmark = manual comp if set, else your average sale price — or, for a
+  // never-sold version, the chosen family member's comp / average sale price.
+  const benchmark = selected ? (selected.compPrice ?? selected.avgSalePrice ?? (ref ? ref.compPrice ?? ref.avgSalePrice : null)) : null;
+  const benchmarkSource =
+    selected?.compPrice != null
+      ? "your comp"
+      : selected?.avgSalePrice != null
+        ? "your avg sale price"
+        : ref
+          ? `the ${versionName(ref)}'s ${ref.compPrice != null ? "comp" : "avg sale price"} (another version)`
+          : "";
 
   let verdict: { tone: "good" | "ok" | "bad"; head: string; text: string } | null = null;
   if (selected && buyUsd != null && benchmark != null && benchmark > 0) {
@@ -127,7 +155,7 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
       <div className="card">
         <h2 className="mb-1 text-lg font-semibold">Is this a good deal?</h2>
         <p className="mb-3 text-xs text-slate-400">
-          Compares a candidate buy price against what you usually sell this item for (or your manual comp). Only items you've sold are listed.
+          Compares a candidate buy price against what you usually sell this item for (or your manual comp). Only items you've sold are listed, plus unsold versions whose family has sales.
         </p>
 
         <label className="label">Search your sold items or scan</label>
@@ -155,11 +183,12 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
                   setSelected(m);
                   setQuery(m.name);
                   setScanMsg("");
+                  setRefKey(null);
                 }}
                 className="block w-full border-b border-slate-50 px-3 py-2 text-left text-sm last:border-0 hover:bg-slate-50"
               >
                 {m.name}
-                <span className="ml-2 text-xs text-slate-400">sold {m.timesSold}×</span>
+                <span className="ml-2 text-xs text-slate-400">{m.timesSold > 0 ? `sold ${m.timesSold}×` : "not sold yet · its family has sales"}</span>
               </button>
             ))}
           </div>
@@ -203,6 +232,35 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
                 <div className="font-bold">{selected.avgDaysToSell != null ? `${Math.round(selected.avgDaysToSell)}d` : "—"}</div>
               </div>
             </div>
+
+            {familyRefs.length > 0 && (
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 text-sm">
+                <p className="mb-2 text-slate-700">
+                  You haven&apos;t sold this version yet. Other versions in its family
+                  {selected.familyName && <> <b>{selected.familyName}</b></>} have:
+                </p>
+                <ul className="space-y-1.5">
+                  {familyRefs.map((p) => (
+                    <li key={p.key} className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        <span className="font-medium">{versionName(p)}</span>
+                        <span className="ml-2 text-xs text-slate-500">
+                          sold {p.timesSold}× · avg {p.avgSalePrice != null ? money(p.avgSalePrice) : "—"}
+                          {p.avgDaysToSell != null && ` · ${Math.round(p.avgDaysToSell)}d to sell`}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRefKey((k) => (k === p.key ? null : p.key))}
+                        className={`rounded-lg px-2 py-1 text-xs font-medium ${refKey === p.key ? "bg-indigo-600 text-white" : "bg-white text-indigo-700 hover:bg-indigo-100"}`}
+                      >
+                        {refKey === p.key ? "✓ Benchmark" : "Use as benchmark"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {trend && (
               <div
@@ -249,10 +307,17 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
               >
                 <div className="text-base font-bold">{verdict.head}</div>
                 <div className="text-sm">{verdict.text}</div>
+                {ref && selected.avgSalePrice == null && selected.compPrice == null && (
+                  <div className="mt-1 text-xs opacity-80">Based on the {versionName(ref)}, a different version — prices can differ.</div>
+                )}
               </div>
             ) : (
               benchmark == null && (
-                <p className="text-xs text-slate-400">No sale history or comp for this item yet — set a comp below to enable a verdict.</p>
+                <p className="text-xs text-slate-400">
+                  {familyRefs.length > 0
+                    ? "Pick another version above as the benchmark, or set a comp below, to get a verdict."
+                    : "No sale history or comp for this item yet — set a comp below to enable a verdict."}
+                </p>
               )
             )}
 

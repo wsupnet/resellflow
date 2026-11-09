@@ -27,7 +27,7 @@ export function BackupRestore() {
     <div className="rounded-lg border border-brand-100 bg-brand-50/40 p-3">
       <div className="text-sm font-medium">Full backup &amp; restore</div>
       <p className="mb-2 text-xs text-slate-500">
-        A complete snapshot of all your records (lots, items, products, sales, expenses, locations, settings). The <b>.zip</b> also bundles your photo image files; the <b>.json</b> is data-only (smaller). Restore accepts either.
+        A complete snapshot of all your records (lots, items, products, families, sales, expenses, locations, settings). The <b>.zip</b> also bundles your photo image files; the <b>.json</b> is data-only (smaller). Restore accepts either.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <a href="/api/export?type=backup-zip" className="btn-primary py-1.5 text-sm">Download .zip (with photos)</a>

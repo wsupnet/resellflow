@@ -594,7 +594,10 @@ export async function mergeProducts(fd: FormData) {
       await tx.item.updateMany({ where: { productId: o.id, userId: user.id }, data: { productId: keep.id } });
       await tx.product.delete({ where: { id: o.id } });
     }
-    await tx.product.update({ where: { id: keep.id }, data: { name, sku, category, compPrice } });
+    // A merged product keeps a family: its own, or else the first one a merged-in product had.
+    const familyId = keep.familyId ?? others.find((x) => x.familyId)?.familyId ?? null;
+    const familyLabel = keep.familyId ? keep.familyLabel : others.find((x) => x.familyId)?.familyLabel ?? keep.familyLabel;
+    await tx.product.update({ where: { id: keep.id }, data: { name, sku, category, compPrice, familyId, familyLabel } });
     // Master-name model: every item in the merged group takes the chosen name.
     await tx.item.updateMany({ where: { productId: keep.id, userId: user.id }, data: { title: name } });
   }, { timeout: 30000, maxWait: 10000 });
@@ -1181,7 +1184,7 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
 
   await prisma.$transaction(
     async (tx) => {
-      const idsOf = async (model: "location" | "product" | "purchase" | "item" | "sale") =>
+      const idsOf = async (model: "location" | "family" | "product" | "purchase" | "item" | "sale") =>
         new Set((await (tx as any)[model].findMany({ where: { userId: uid }, select: { id: true } })).map((r: any) => r.id));
 
       // 0) Locations (referenced by purchases)
@@ -1194,10 +1197,20 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
       }
       const locationIds = await idsOf("location");
 
+      // 0b) Families (referenced by products). Older backups have none.
+      if (Array.isArray(d.families) && d.families.length) {
+        const r = await tx.family.createMany({
+          data: d.families.map((f: any) => ({ id: f.id, userId: uid, name: String(f.name ?? "Family").slice(0, 200), createdAt: D(f.createdAt) })),
+          skipDuplicates: true
+        });
+        counts.families = r.count;
+      }
+      const familyIds = await idsOf("family");
+
       // 1) Products
       if (Array.isArray(d.products) && d.products.length) {
         const r = await tx.product.createMany({
-          data: d.products.map((p: any) => ({ id: p.id, userId: uid, name: p.name, normalizedKey: p.normalizedKey, category: p.category ?? null, sku: p.sku ?? null, compPrice: p.compPrice ?? null, compNotes: p.compNotes ?? null })),
+          data: d.products.map((p: any) => ({ id: p.id, userId: uid, name: p.name, normalizedKey: p.normalizedKey, category: p.category ?? null, sku: p.sku ?? null, compPrice: p.compPrice ?? null, compNotes: p.compNotes ?? null, familyId: p.familyId && familyIds.has(p.familyId) ? p.familyId : null, familyLabel: p.familyId && familyIds.has(p.familyId) ? p.familyLabel ?? null : null, notFamilyWith: Array.isArray(p.notFamilyWith) ? p.notFamilyWith.map(String) : [] })),
           skipDuplicates: true
         });
         counts.products = r.count;
@@ -1593,3 +1606,126 @@ export async function deleteInvite(fd: FormData) {
   await prisma.invite.deleteMany({ where: { id } });
   revalidatePath("/settings");
 }
+
+// ─────────────── product families ───────────────
+
+/** Resolve the family a form targets: an existing one (owned) or a new one by name. */
+async function resolveFamily(userId: string, fd: FormData): Promise<string | null> {
+  const familyId = str(fd.get("familyId"));
+  if (familyId && familyId !== "new") {
+    const f = await prisma.family.findFirst({ where: { id: familyId, userId } });
+    return f?.id ?? null;
+  }
+  const name = str(fd.get("newFamilyName")) || str(fd.get("name"));
+  if (!name) return null;
+  const f = await prisma.family.create({ data: { userId, name: name.slice(0, 200) } });
+  return f.id;
+}
+
+function revalidateFamilies() {
+  for (const p of ["/inventory", "/insights", "/deal-checker"]) revalidatePath(p);
+  revalidatePath("/products/[id]", "page");
+  revalidatePath("/families/[id]", "page");
+}
+
+/** Put one product in a family (existing or new), with its version label. */
+export async function setProductFamily(fd: FormData) {
+  const user = await requireUser();
+  const product = await prisma.product.findFirst({ where: { id: str(fd.get("productId")), userId: user.id } });
+  if (!product) throw new Error("Product not found");
+  const familyId = await resolveFamily(user.id, fd);
+  if (!familyId) {
+    await setFlash("Pick a family, or type a name for a new one");
+    return;
+  }
+  await prisma.product.update({ where: { id: product.id }, data: { familyId, familyLabel: str(fd.get("label")) || null } });
+  await setFlash("Added to family");
+  revalidateFamilies();
+}
+
+/** Change a product's version label within its family. */
+export async function setFamilyLabel(fd: FormData) {
+  const user = await requireUser();
+  await prisma.product.updateMany({
+    where: { id: str(fd.get("productId")), userId: user.id },
+    data: { familyLabel: str(fd.get("label")) || null }
+  });
+  await setFlash("Label saved");
+  revalidateFamilies();
+}
+
+/** Take a product out of its family (the family and other members stay). */
+export async function removeFromFamily(fd: FormData) {
+  const user = await requireUser();
+  await prisma.product.updateMany({ where: { id: str(fd.get("productId")), userId: user.id }, data: { familyId: null, familyLabel: null } });
+  await setFlash("Removed from family");
+  revalidateFamilies();
+}
+
+/**
+ * Group several products into one family (Inventory bulk action, or accepting
+ * a suggestion). Products already in another family move to this one.
+ */
+export async function groupIntoFamily(fd: FormData) {
+  const user = await requireUser();
+  const ids = [...new Set(fd.getAll("productId").map(String).filter(Boolean))];
+  if (ids.length === 0) {
+    await setFlash("Tick at least one product first");
+    return;
+  }
+  const familyId = await resolveFamily(user.id, fd);
+  if (!familyId) {
+    await setFlash("Pick a family, or type a name for a new one");
+    return;
+  }
+  const r = await prisma.product.updateMany({ where: { id: { in: ids }, userId: user.id }, data: { familyId } });
+  const fam = await prisma.family.findUnique({ where: { id: familyId }, select: { name: true } });
+  await setFlash(`${r.count} product${r.count === 1 ? "" : "s"} added to “${fam?.name ?? "family"}”`);
+  revalidateFamilies();
+}
+
+/** "Not a family": stop suggesting these products together (pairs stored on both sides). */
+export async function dismissFamilySuggestion(fd: FormData) {
+  const user = await requireUser();
+  const ids = [...new Set(fd.getAll("productId").map(String).filter(Boolean))];
+  const products = await prisma.product.findMany({ where: { id: { in: ids }, userId: user.id }, select: { id: true, notFamilyWith: true } });
+  // A "join" suggestion also names the family it matched, so pair against its members too.
+  const familyId = str(fd.get("familyId"));
+  const famMembers = familyId
+    ? (await prisma.product.findMany({ where: { familyId, userId: user.id }, select: { id: true } })).map((p) => p.id)
+    : [];
+  const all = [...new Set([...products.map((p) => p.id), ...famMembers])];
+  for (const id of all) {
+    const p = products.find((x) => x.id === id) ?? (await prisma.product.findUnique({ where: { id }, select: { id: true, notFamilyWith: true } }));
+    if (!p) continue;
+    const add = all.filter((o) => o !== id && !p.notFamilyWith.includes(o));
+    if (add.length) await prisma.product.update({ where: { id }, data: { notFamilyWith: { push: add } } });
+  }
+  await setFlash("Got it — won't suggest that family again");
+  revalidateFamilies();
+}
+
+export async function renameFamily(fd: FormData) {
+  const user = await requireUser();
+  const name = str(fd.get("name"));
+  if (!name) return;
+  await prisma.family.updateMany({ where: { id: str(fd.get("familyId")), userId: user.id }, data: { name: name.slice(0, 200) } });
+  await setFlash("Family renamed");
+  revalidateFamilies();
+}
+
+/** Delete a family. Its products stay exactly as they are, just unlinked. */
+export async function deleteFamily(fd: FormData) {
+  const user = await requireUser();
+  const id = str(fd.get("familyId"));
+  const fam = await prisma.family.findFirst({ where: { id, userId: user.id } });
+  if (!fam) return;
+  await prisma.$transaction([
+    prisma.product.updateMany({ where: { familyId: id, userId: user.id }, data: { familyId: null, familyLabel: null } }),
+    prisma.family.delete({ where: { id } })
+  ]);
+  await setFlash(`Deleted family “${fam.name}” (its products are unchanged)`);
+  revalidateFamilies();
+  redirect("/inventory?view=family");
+}
+

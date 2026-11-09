@@ -28,6 +28,7 @@ model User {
   items        Item[]
   sales        Sale[]
   products     Product[]
+  families     Family[]
   expenses     Expense[]
   photos       Photo[]
   settings     Settings?
@@ -312,10 +313,35 @@ model Product {
   // suggesting a name-based link between them (stored on both sides).
   notSameAs     String[] @default([])
 
+  // Family: a looser group of DIFFERENT products that are the same thing on the
+  // surface (US vs Japan release, colour variants). Profits stay per product;
+  // the family only links them for side-by-side and combined views.
+  familyId      String?
+  family        Family?  @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  // Which version this product is within its family ("Japan release", "Blue").
+  familyLabel   String?
+  // Products the user said are NOT in the same family, so the name-based
+  // family suggestion stops pairing them (stored on both sides).
+  notFamilyWith String[] @default([])
+
   items         Item[]
 
   @@unique([userId, normalizedKey])
   @@unique([userId, sku])
+  @@index([userId])
+  @@index([familyId])
+}
+
+// A named group of related products (see Product.familyId).
+model Family {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime  @default(now())
+
+  products  Product[]
+
   @@index([userId])
 }
 

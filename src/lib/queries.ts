@@ -596,6 +596,70 @@ export interface VariantStat {
   listed: number;
   costTiedUp: number;
   thumbId: string | null;
+  // Family (Product.familyId) — for the Insights family rollup + Deal Checker.
+  familyId: string | null;
+  familyLabel: string | null;
+  // Raw sums behind the averages, so rows can be combined exactly (rollupStats).
+  roiSum: number;
+  roiN: number;
+  daysSum: number;
+  daysN: number;
+}
+
+/** Blended buy-more score: profit per sale × how often it sells × ROI. */
+export function blendedScore(avgNet: number | null, sold: number, avgRoi: number | null): number {
+  const freqFactor = Math.log2(1 + sold);
+  // ROI from one or two sales is mostly luck, so its pull on the blended score
+  // ramps up with sales count and only counts in full from ROI_MIN_SALES on.
+  const roiConfidence = Math.min(1, sold / ROI_MIN_SALES);
+  const roiFactor = 1 + Math.max(-0.5, Math.min(2, avgRoi ?? 0)) * roiConfidence;
+  return (avgNet ?? 0) * freqFactor * roiFactor;
+}
+
+/**
+ * Combine several variant rows (e.g. a family's products) into one, summing
+ * the raw totals so the averages are exact rather than averages of averages.
+ */
+export function rollupStats(rows: VariantStat[], key: string, name: string): VariantStat {
+  const sum = (f: (r: VariantStat) => number) => rows.reduce((a, r) => a + f(r), 0);
+  const sold = sum((r) => r.timesSold);
+  const totalNet = sum((r) => r.totalNet);
+  const roiN = sum((r) => r.roiN);
+  const roiSum = sum((r) => r.roiSum);
+  const daysN = sum((r) => r.daysN);
+  const daysSum = sum((r) => r.daysSum);
+  const avgNet = sold ? totalNet / sold : null;
+  const avgRoi = roiN ? roiSum / roiN : null;
+  const hasYen = rows.some((r) => r.totalNetYen != null);
+  const saleSum = sum((r) => (r.avgSalePrice ?? 0) * r.timesSold);
+  const first = rows[0];
+  return {
+    ...first,
+    key,
+    name,
+    baseName: name,
+    condition: null,
+    sku: null,
+    compPrice: null,
+    timesSold: sold,
+    totalNet,
+    avgNet,
+    ...(hasYen ? { totalNetYen: sum((r) => r.totalNetYen ?? 0) } : {}),
+    avgRoi,
+    totalCost: sum((r) => r.totalCost),
+    avgSalePrice: sold ? saleSum / sold : null,
+    avgDaysToSell: daysN ? daysSum / daysN : null,
+    score: blendedScore(avgNet, sold, avgRoi),
+    bundleSold: sum((r) => r.bundleSold),
+    inStock: sum((r) => r.inStock),
+    listed: sum((r) => r.listed),
+    costTiedUp: sum((r) => r.costTiedUp),
+    familyLabel: null,
+    roiSum,
+    roiN,
+    daysSum,
+    daysN
+  };
 }
 
 /** Sales needed before a variant's ROI is trusted: ranks in the ROI lens and
@@ -653,6 +717,8 @@ export async function getVariantStats(
     inStock: number;
     listed: number;
     costTiedUp: number;
+    familyId: string | null;
+    familyLabel: string | null;
   }
   const agg = new Map<string, Agg>();
 
@@ -672,7 +738,9 @@ export async function getVariantStats(
           sku: i.product?.sku ?? null,
           compPrice: i.product?.compPrice ?? null,
           thumbId: null,
-          net: 0, netYen: 0, cost: 0, buyCostSum: 0, buyN: 0, roiSum: 0, roiN: 0, sold: 0, bundleSold: 0, sales: [], daysSum: 0, daysN: 0, inStock: 0, listed: 0, costTiedUp: 0
+          net: 0, netYen: 0, cost: 0, buyCostSum: 0, buyN: 0, roiSum: 0, roiN: 0, sold: 0, bundleSold: 0, sales: [], daysSum: 0, daysN: 0, inStock: 0, listed: 0, costTiedUp: 0,
+          familyId: i.product?.familyId ?? null,
+          familyLabel: i.product?.familyLabel ?? null
         };
       if (!a.thumbId && i.photos[0]) a.thumbId = i.photos[0].id;
       const fin = bundle.itemFin.get(i.id);
@@ -711,11 +779,6 @@ export async function getVariantStats(
     const recentAvg = recent.length ? recent.reduce((s, x) => s + x.price, 0) / recent.length : null;
     const avgNet = a.sold ? a.net / a.sold : null;
     const avgRoi = a.roiN ? a.roiSum / a.roiN : null;
-    const freqFactor = Math.log2(1 + a.sold);
-    // ROI from one or two sales is mostly luck, so its pull on the blended score
-    // ramps up with sales count and only counts in full from ROI_MIN_SALES on.
-    const roiConfidence = Math.min(1, a.sold / ROI_MIN_SALES);
-    const roiFactor = 1 + Math.max(-0.5, Math.min(2, avgRoi ?? 0)) * roiConfidence;
     return {
       key,
       productId: a.productId,
@@ -737,12 +800,18 @@ export async function getVariantStats(
       lastSalePrice: sales[0]?.price ?? null,
       lastSaleDate: sales[0]?.date ? new Date(sales[0].date).toISOString() : null,
       avgDaysToSell: a.daysN ? a.daysSum / a.daysN : null,
-      score: (avgNet ?? 0) * freqFactor * roiFactor,
+      score: blendedScore(avgNet, a.sold, avgRoi),
       bundleSold: a.bundleSold,
       inStock: a.inStock,
       listed: a.listed,
       costTiedUp: a.costTiedUp,
-      thumbId: a.thumbId
+      thumbId: a.thumbId,
+      familyId: a.familyId,
+      familyLabel: a.familyLabel,
+      roiSum: a.roiSum,
+      roiN: a.roiN,
+      daysSum: a.daysSum,
+      daysN: a.daysN
     };
   });
 

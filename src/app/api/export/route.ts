@@ -14,9 +14,10 @@ import fs from "fs";
  *  which live on the uploads volume; photo metadata is included so surviving files
  *  re-link on restore). Pairs with restoreBackup(). */
 async function fullBackup(userId: string) {
-  const [settings, locations, products, purchases, items, sales, saleItems, expenses, photos] = await Promise.all([
+  const [settings, locations, families, products, purchases, items, sales, saleItems, expenses, photos] = await Promise.all([
     prisma.settings.findUnique({ where: { userId } }),
     prisma.location.findMany({ where: { userId } }),
+    prisma.family.findMany({ where: { userId } }),
     prisma.product.findMany({ where: { userId } }),
     prisma.purchase.findMany({ where: { userId } }),
     prisma.item.findMany({ where: { userId } }),
@@ -33,7 +34,7 @@ async function fullBackup(userId: string) {
       locations: locations.length, products: products.length, purchases: purchases.length, items: items.length,
       sales: sales.length, saleItems: saleItems.length, expenses: expenses.length, photos: photos.length
     },
-    data: { settings, locations, products, purchases, items, sales, saleItems, expenses, photos }
+    data: { settings, locations, families, products, purchases, items, sales, saleItems, expenses, photos }
   };
 }
 

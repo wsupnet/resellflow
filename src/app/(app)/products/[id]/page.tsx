@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getProductUnits, getProductSales, ROI_MIN_SALES } from "@/lib/queries";
+import { getProductUnits, getProductSales, getFinancials, ROI_MIN_SALES } from "@/lib/queries";
+import { productRollups, familyHintFor } from "@/lib/families";
+import FamilyBox from "@/components/FamilyBox";
 import { tracksCondition } from "@/lib/catalog";
 import SaleBreakdownCard from "@/components/SaleBreakdownCard";
 import { StatCard, Net, Roi, StatusPill } from "@/components/ui";
@@ -20,7 +22,10 @@ export default async function ProductPage(props: {
   const params = await props.params;
   const searchParams = await props.searchParams;
   const user = await requireUser();
-  const product = await prisma.product.findFirst({ where: { id: params.id, userId: user.id } });
+  const product = await prisma.product.findFirst({
+    where: { id: params.id, userId: user.id },
+    include: { family: { select: { id: true, name: true, products: { select: { id: true } } } } }
+  });
   if (!product) notFound();
 
   // Opened from Insights: one condition (condition-tracked products) and the same
@@ -33,6 +38,21 @@ export default async function ProductPage(props: {
     getProductSales(user.id, product.id, { condition, individualOnly }),
     getMoney(user.id)
   ]);
+  // Family: siblings' rollups when in one; otherwise the families to pick from + any suggestion.
+  const siblingIds = new Set((product.family?.products ?? []).map((p) => p.id).filter((id) => id !== product.id));
+  const [siblingRoll, families, suggestion] = await Promise.all([
+    siblingIds.size ? getFinancials(user.id).then((b) => productRollups(b, siblingIds)) : Promise.resolve(new Map()),
+    product.family ? Promise.resolve([]) : prisma.family.findMany({ where: { userId: user.id }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    product.family ? Promise.resolve(null) : familyHintFor(user.id, product.id)
+  ]);
+  const siblings = [...siblingIds].map(
+    (id) =>
+      siblingRoll.get(id) ?? {
+        productId: id, name: "(no items)", label: null, sku: null,
+        units: 0, inStock: 0, listed: 0, sold: 0, saleSum: 0, totalNet: 0, roiSum: 0, roiN: 0, daysSum: 0, daysN: 0, thumbId: null
+      }
+  );
+
   const conditions = tracks ? [...new Set(allUnits.map((u) => u.condition || "Unspecified"))].sort() : [];
   const units = condition ? allUnits.filter((u) => (u.condition || "Unspecified") === condition) : allUnits;
   const qs = (o: { condition?: string | null; sales?: string }) => {
@@ -70,6 +90,12 @@ export default async function ProductPage(props: {
           {product.sku && <span className="font-mono">{product.sku} · </span>}
           {product.category ?? "no category"}
           {product.compPrice != null && <> · comp {fmtMoney(product.compPrice, m)}</>}
+          {product.family && (
+            <>
+              {" · "}family <Link href={`/families/${product.family.id}`} className="text-brand-600 hover:underline">{product.family.name}</Link>
+              {product.familyLabel && <> ({product.familyLabel})</>}
+            </>
+          )}
         </p>
       </div>
 
@@ -144,6 +170,15 @@ export default async function ProductPage(props: {
           </>
         )}
       </div>
+
+      <FamilyBox
+        productId={product.id}
+        family={product.family ? { id: product.family.id, name: product.family.name } : null}
+        label={product.familyLabel}
+        siblings={siblings}
+        families={families}
+        suggestion={suggestion}
+      />
 
       <div className="card">
         <h2 className="mb-1 text-lg font-semibold">Units ({units.length})</h2>

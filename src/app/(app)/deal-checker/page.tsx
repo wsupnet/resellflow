@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { getVariantStats } from "@/lib/queries";
+import { prisma } from "@/lib/db";
 import { getFxRate } from "@/lib/fx";
 import { getViewCurrency } from "@/lib/money";
 import DealChecker, { type DealProduct } from "@/components/DealChecker";
@@ -12,8 +13,18 @@ export default async function DealCheckerPage() {
 
   // One row per variant (product, or product+condition for tracked categories).
   // Only variants with at least one real sale: unsold stock (even with a manual
-  // comp) and write-offs have no sale history to judge a deal against.
-  const products: DealProduct[] = variants.filter((v) => v.timesSold > 0).map((v) => ({
+  // comp) and write-offs have no sale history to judge a deal against. The one
+  // exception: a never-sold version whose FAMILY has sales, so the other
+  // versions can stand in as a reference.
+  const familiesWithSales = new Set(variants.filter((v) => v.timesSold > 0 && v.familyId).map((v) => v.familyId!));
+  const fams = await prisma.family.findMany({ where: { userId: user.id }, select: { id: true, name: true } });
+  const famName = new Map(fams.map((f) => [f.id, f.name]));
+  const products: DealProduct[] = variants
+    .filter((v) => v.timesSold > 0 || (v.familyId && familiesWithSales.has(v.familyId)))
+    .map((v) => ({
+    familyId: v.familyId,
+    familyName: v.familyId ? famName.get(v.familyId) ?? null : null,
+    familyLabel: v.familyLabel,
     key: v.key,
     productId: v.productId,
     name: v.name,
