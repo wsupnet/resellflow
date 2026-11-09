@@ -237,7 +237,11 @@ To let someone run their **own** copy instead, hand them this repo — the same
 
 Use **Settings → Import** to bulk-import inventory and sales from CSV (download
 the templates there for the exact columns), or restore a full ResellFlow backup
-(`.json` or `.zip` with photos).
+(`.json` or `.zip` with photos). That's also the easiest way to move to a fresh
+install: back up on the old one, create your account on the new one, restore.
+Backups made by earlier versions restore too (tested back to August 2026), and settings come across too if the
+new account hasn't changed any yet. See the
+[user guide](docs/USER-GUIDE.md#10-back-up-and-restore-your-data).
 
 ## How the money math works
 

@@ -1240,20 +1240,67 @@ async function applyRestore(uid: string, d: any): Promise<Record<string, number>
         counts.photos = r.count;
       }
 
-      // 8) Settings — restore fee config if the user doesn't already have it.
+      // 8) Settings — taken from the backup only while the account's own settings
+      // are still the untouched defaults (a new account, e.g. moving to a fresh
+      // install). Settings someone has already changed are never overwritten.
       if (d.settings) {
-        const s = d.settings;
-        await tx.settings.upsert({
-          where: { userId: uid },
-          create: { userId: uid, ebayFeePct: s.ebayFeePct, ebayFlatFee: s.ebayFlatFee, mercariFeePct: s.mercariFeePct, adFeePct: s.adFeePct, defaultShipping: s.defaultShipping, upcLookup: !!s.upcLookup, homeCurrency: s.homeCurrency === "JPY" ? "JPY" : "USD", singleCurrency: !!s.singleCurrency, fxMode: s.fxMode === "historical" ? "historical" : "live", fxLive: !!s.fxLive, fxManualRate: typeof s.fxManualRate === "number" && s.fxManualRate > 0 ? s.fxManualRate : 150, theme: ["light", "cream", "dark", "system"].includes(s.theme) ? s.theme : "light" },
-          update: {}
-        });
+        const restored = settingsFromBackup(d.settings);
+        const current = await tx.settings.findUnique({ where: { userId: uid } });
+        if (!current) {
+          await tx.settings.create({ data: { userId: uid, ...restored } });
+          counts.settings = 1;
+        } else if (hasDefaultSettings(current)) {
+          await tx.settings.update({ where: { userId: uid }, data: restored });
+          counts.settings = 1;
+        }
       }
     },
     { timeout: 120000, maxWait: 15000 }
   );
 
   return counts;
+}
+
+// Settings schema defaults (prisma/schema.prisma). An account whose settings all
+// still match these has never changed them, so a restore may fill them in.
+const DEFAULT_SETTINGS = {
+  ebayFeePct: 0.1325,
+  ebayFlatFee: 0.4,
+  mercariFeePct: 0.1,
+  adFeePct: 0.02,
+  defaultShipping: 0,
+  upcLookup: false,
+  homeCurrency: "USD",
+  fxMode: "live",
+  singleCurrency: false,
+  fxLive: false,
+  fxManualRate: 150,
+  theme: "light"
+};
+
+function hasDefaultSettings(s: Record<string, unknown>): boolean {
+  return Object.entries(DEFAULT_SETTINGS).every(([k, v]) => s[k] === v);
+}
+
+/** A backup's settings, checked field by field. Anything missing or out of range
+ *  (older backups lack the newer fields) falls back to the default. */
+function settingsFromBackup(s: any): typeof DEFAULT_SETTINGS {
+  const num = (v: unknown, def: number, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : def);
+  const D = DEFAULT_SETTINGS;
+  return {
+    ebayFeePct: num(s.ebayFeePct, D.ebayFeePct, 1),
+    ebayFlatFee: num(s.ebayFlatFee, D.ebayFlatFee, 1000),
+    mercariFeePct: num(s.mercariFeePct, D.mercariFeePct, 1),
+    adFeePct: num(s.adFeePct, D.adFeePct, 1),
+    defaultShipping: num(s.defaultShipping, D.defaultShipping, 100000),
+    upcLookup: s.upcLookup === true,
+    homeCurrency: s.homeCurrency === "JPY" ? "JPY" : "USD",
+    fxMode: s.fxMode === "historical" ? "historical" : "live",
+    singleCurrency: s.singleCurrency === true,
+    fxLive: s.fxLive === true,
+    fxManualRate: typeof s.fxManualRate === "number" && Number.isFinite(s.fxManualRate) && s.fxManualRate > 0 ? s.fxManualRate : D.fxManualRate,
+    theme: ["light", "cream", "dark", "system"].includes(s.theme) ? s.theme : D.theme
+  };
 }
 
 // Restore limits: generous for real backups (photos are stored downscaled, ~0.5MB

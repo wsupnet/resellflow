@@ -305,6 +305,14 @@ it's safe to run on a live account. Photos in a `.zip` are only restored for ite
 account, and only if they're photos as ResellFlow saves them (JPEG, at most 1600 px). Anything
 else in the file is skipped.
 
+Your **settings** (fee percentages, currency, theme, barcode lookup) come from the backup only if
+you haven't changed any settings on this account yet, for example on a brand-new account. If you
+have, your current settings are kept.
+
+**Moving to a new install:** download a `.zip` backup on the old one, set up the new one and
+create your account, then restore the `.zip` there. Everyone with an account does this for their
+own account (each backup holds one account), and uploads are limited to 30 MB.
+
 ### CSV export and import
 
 - **Export CSV**: Inventory, Sales, Lots or Expenses, handy for spreadsheets or taxes. Text that
