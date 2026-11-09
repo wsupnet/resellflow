@@ -14,6 +14,7 @@ bump `package.json` to match when you add one.
 - **Families in Insights**: switch Insights to **Families** to rank each family as one combined row.
 - **Deal Checker uses family sales**: scan a version you've never sold, and if another version in its family has sold, you can use that as the benchmark for a verdict.
 - **Clearer privacy settings**: Settings → Locations and the "What leaves your server" list show their descriptions on screen again instead of behind a **?**.
+- **Roomier dropdowns**: the arrow on every dropdown now sits a little in from the edge.
 
 ## 0.2.1 — 2026-11-09
 
