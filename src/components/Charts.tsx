@@ -10,6 +10,7 @@ import {
   CartesianGrid,
   Cell
 } from "recharts";
+import { useRouter } from "next/navigation";
 
 export function MonthlyNetChart({
   data,
@@ -55,13 +56,15 @@ export function HBarChart({
 }: {
   // `fullName` (optional) is the untruncated label — the hover tooltip shows it
   // while the axis keeps the shortened `name`.
-  data: { name: string; value: number; fullName?: string }[];
+  // `href` (optional) makes that bar a link (e.g. Insights → product breakdown).
+  data: { name: string; value: number; fullName?: string; href?: string }[];
   // Money charts pre-convert values + pass a currency symbol; non-money lenses
   // (ROI %, counts, days) pass a suffix / no symbol instead.
   symbol?: string;
   suffix?: string;
   decimals?: number;
 }) {
+  const router = useRouter();
   if (data.length === 0) {
     return <div className="py-12 text-center text-sm text-slate-400">Not enough data yet.</div>;
   }
@@ -86,9 +89,16 @@ export function HBarChart({
           itemStyle={{ color: "rgb(var(--slate-800))" }}
           labelStyle={{ color: "rgb(var(--slate-800))", fontWeight: 600 }}
         />
-        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+        <Bar
+          dataKey="value"
+          radius={[0, 4, 4, 0]}
+          onClick={(entry: { href?: string; payload?: { href?: string } }) => {
+            const href = entry?.href ?? entry?.payload?.href;
+            if (href) router.push(href);
+          }}
+        >
           {data.map((d, i) => (
-            <Cell key={i} fill={d.value >= 0 ? "#2f6df6" : "#ef4444"} />
+            <Cell key={i} fill={d.value >= 0 ? "#2f6df6" : "#ef4444"} cursor={d.href ? "pointer" : undefined} />
           ))}
         </Bar>
       </BarChart>

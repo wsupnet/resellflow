@@ -108,7 +108,8 @@ sales add up to it, so there are no mystery totals.
   **platform**, **source type** and **expense category**
 - **Insights: "what to buy more of."** Ranks products by a blended score, or by total profit,
   ROI, how often they sell, or how fast. Bundle sales are tagged and can be filtered out, and an
-  ROI needs 3+ sales before it can top the list
+  ROI needs 3+ sales before it can top the list. Click any product to see every sale behind its
+  numbers: purchase price, lot share, fees, expenses and the ROI math
 
   ![Insights](screenshots/desktop-insights.png)
 

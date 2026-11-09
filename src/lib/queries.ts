@@ -177,23 +177,12 @@ export function totalsYen(bundle: FinancialsBundle, live: number): Totals {
  * the fees and ledger expenses attributed to it (sale fees and lot/sale-level
  * expenses are split by this item's share, the same way the totals are computed).
  */
-export async function getItemDetail(userId: string, itemId: string) {
-  const bundle = await getFinancials(userId);
-
-  let item: (typeof bundle.purchases)[number]["items"][number] | null = null;
-  let lot: (typeof bundle.purchases)[number] | null = null;
-  for (const p of bundle.purchases) {
-    const found = p.items.find((i) => i.id === itemId);
-    if (found) {
-      item = found;
-      lot = p;
-      break;
-    }
-  }
-  if (!item || !lot) return null;
-
-  const fin = bundle.itemFin.get(itemId) ?? null;
-
+/**
+ * The sale an item was on, and its share of that sale's fees plus every ledger
+ * expense attributed to it (item / share of sale / share of lot) — the same
+ * split finance.ts uses for net.
+ */
+export function itemCostBreakdown(bundle: FinancialsBundle, lot: FinancialsBundle["purchases"][number], itemId: string) {
   // Locate the sale this item was sold on and its share of that sale.
   let sale: (typeof bundle.sales)[number] | null = null;
   let weight = 0;
@@ -231,6 +220,28 @@ export async function getItemDetail(userId: string, itemId: string) {
       expenses.push({ label: e.description || e.category, category: e.category, amount: e.amountUsd * w, scope: "share of lot" });
     }
   }
+
+  return { sale, weight, fees, expenses };
+}
+
+export async function getItemDetail(userId: string, itemId: string) {
+  const bundle = await getFinancials(userId);
+
+  let item: (typeof bundle.purchases)[number]["items"][number] | null = null;
+  let lot: (typeof bundle.purchases)[number] | null = null;
+  for (const p of bundle.purchases) {
+    const found = p.items.find((i) => i.id === itemId);
+    if (found) {
+      item = found;
+      lot = p;
+      break;
+    }
+  }
+  if (!item || !lot) return null;
+
+  const fin = bundle.itemFin.get(itemId) ?? null;
+
+  const { sale, fees, expenses } = itemCostBreakdown(bundle, lot, itemId);
 
   // Days to sell (purchase → sold), or days in stock so far if unsold.
   const purchaseMs = +new Date(lot.purchasedAt);
@@ -319,6 +330,116 @@ export async function getProductUnits(userId: string, productId: string, bundle?
       });
     }
   return units.sort((a, b2) => +b2.purchasedAt - +a.purchasedAt || a.id.localeCompare(b2.id));
+}
+
+/** Everything behind one sold unit's numbers, for the product sales breakdown. */
+export interface SaleBreakdown {
+  itemId: string;
+  title: string;
+  condition: string | null;
+  purchase: {
+    id: string;
+    isLot: boolean;
+    title: string;
+    source: string;
+    isPersonal: boolean;
+    date: Date;
+    approx: boolean;
+    paid: number; // single: cost + tax; lot: the lot's total cost + tax
+    itemCount: number; // items in the lot (1 for a single)
+    shareMethod: "single" | "override" | "proportional" | "personal";
+    // What weighted this item's share of the lot (finance.ts allocateLot):
+    // its own sale price, its estimated value, or the average of the others.
+    weightBasis: "sale" | "estimate" | "average" | null;
+  };
+  sale: {
+    id: string;
+    date: Date;
+    platform: string;
+    price: number; // this item's line price (its share, for a bundle)
+    bundled: boolean; // price is a split of a bundle total
+    bundleTotal: number | null;
+    lineCount: number;
+  };
+  fees: { label: string; amount: number }[];
+  expenses: { label: string; category: string; amount: number; scope: string }[];
+  allocatedCost: number;
+  feeShare: number;
+  expense: number;
+  net: number;
+  roi: number | null;
+  daysToSell: number | null; // null when the purchase date is a best guess
+  /** False when the Insights "individual sales only" view leaves this one out. */
+  counted: boolean;
+}
+
+/**
+ * Per-sale breakdown for a product's sold units (optionally one condition),
+ * newest sale first. `individualOnly` mirrors the Insights toggle: bundle
+ * sales stay listed but are marked not counted.
+ */
+export async function getProductSales(
+  userId: string,
+  productId: string,
+  opts: { condition?: string | null; individualOnly?: boolean } = {}
+): Promise<SaleBreakdown[]> {
+  const bundle = await getFinancials(userId);
+  const out: SaleBreakdown[] = [];
+  for (const p of bundle.purchases)
+    for (const i of p.items) {
+      if (i.productId !== productId) continue;
+      // Condition filter ("Unspecified" = no condition set), as Insights groups them.
+      if (opts.condition != null && (i.condition || "Unspecified") !== opts.condition) continue;
+      const f = bundle.itemFin.get(i.id);
+      if (!f?.sold) continue;
+      const { sale, fees, expenses } = itemCostBreakdown(bundle, p, i.id);
+      if (!sale) continue;
+      const line = sale.lines.find((l) => l.itemId === i.id)!;
+      const bundled = !!line.allocated;
+      const approx = p.purchasedAtApprox;
+      const weightBasis =
+        p.kind !== "LOT" || p.isPersonal || i.costOverrideUsd != null ? null
+        : line.salePrice > 0 && !bundled ? "sale"
+        : i.estimatedValue != null && i.estimatedValue > 0 ? "estimate"
+        : "average";
+      out.push({
+        itemId: i.id,
+        title: i.title,
+        condition: i.condition,
+        purchase: {
+          id: p.id,
+          isLot: p.kind === "LOT",
+          title: p.title,
+          source: p.source,
+          isPersonal: p.isPersonal,
+          date: p.purchasedAt,
+          approx,
+          paid: p.costUsd + p.taxUsd,
+          itemCount: p.items.length,
+          shareMethod: p.isPersonal ? "personal" : i.costOverrideUsd != null ? "override" : p.kind === "LOT" ? "proportional" : "single",
+          weightBasis
+        },
+        sale: {
+          id: sale.id,
+          date: sale.soldAt,
+          platform: sale.platform,
+          price: f.gross,
+          bundled,
+          bundleTotal: bundled ? sale.bundleTotal ?? sale.lines.reduce((a, l) => a + l.salePrice, 0) : null,
+          lineCount: sale.lines.length
+        },
+        fees,
+        expenses,
+        allocatedCost: f.allocatedCost,
+        feeShare: f.feeShare,
+        expense: f.expense,
+        net: f.net,
+        roi: f.roi,
+        daysToSell: approx ? null : Math.max(0, Math.round((+new Date(sale.soldAt) - +new Date(p.purchasedAt)) / 86400000)),
+        counted: !(opts.individualOnly && bundled)
+      });
+    }
+  return out.sort((a, b) => +b.sale.date - +a.sale.date);
 }
 
 export async function listLocations(userId: string) {

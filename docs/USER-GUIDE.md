@@ -268,6 +268,10 @@ For deeper analysis, open **Analytics**:
   Items sold in bundles are tagged (for example "2 in bundles"), and **Individual only** shows numbers from
   single-item sales alone. An ROI from fewer than 3 sales is marked **few sales** and ranks below items with
   enough history.
+  **Click a product** (its name or its bar in the chart) to open its page with a **Sales breakdown**:
+  every sale behind the row, showing what you paid (and, for a lot, the lot total and how this item's
+  share was worked out), what it sold for, each fee and expense, and the net and ROI math. It opens
+  on the same condition and the same Individual-only choice, so the totals match the row you clicked.
 - **Trends**: which month each category sells best in
 
 ---

@@ -61,8 +61,20 @@ export default async function InsightsPage(
     return q ? `/insights?${q}` : "/insights";
   };
 
+  // Each product opens its sales breakdown, filtered to the same condition and
+  // the same individual-sales choice so the numbers match this row.
+  const breakdownHref = (s: VariantStat) => {
+    if (s.productId.startsWith("item:")) return `/items/${s.productId.slice(5)}`;
+    const p = new URLSearchParams();
+    if (s.condition) p.set("condition", s.condition);
+    if (individualOnly) p.set("sales", "individual");
+    const q = p.toString();
+    return `/products/${s.productId}${q ? `?${q}` : ""}`;
+  };
+
   const u = moneyUnit(m);
   const chartData = sorted.slice(0, 10).map((s) => ({
+    href: breakdownHref(s),
     name: s.name.length > 22 ? s.name.slice(0, 21) + "…" : s.name,
     fullName: s.name, // hover tooltip shows the untruncated name
     value:
@@ -128,6 +140,7 @@ export default async function InsightsPage(
               Top 10 by {SORTS.find((s) => s.key === sort)?.label}
               {sort === "roi" ? " (%)" : sort === "freq" ? " (count)" : sort === "speed" ? " (days)" : sort === "score" ? " (score)" : ` (${u.symbol})`}
             </h2>
+            <p className="-mt-1 mb-2 text-xs text-slate-400">Click a product (bar or name) to see every sale behind its numbers.</p>
             {sort === "speed" ? (
               // A bar chart of days is misleading here — lower is better and same-day
               // sales are 0 (invisible). The table below is ranked fastest-first.
@@ -155,7 +168,9 @@ export default async function InsightsPage(
               <tbody>
                 {pg.rows.map((s) => (
                   <tr key={s.key} className="border-b border-slate-50">
-                    <td className="td cell-main font-medium" data-label="">{s.name}</td>
+                    <td className="td cell-main font-medium" data-label="">
+                      <Link href={breakdownHref(s)} className="text-slate-800 hover:text-brand-700 hover:underline">{s.name}</Link>
+                    </td>
                     <td className="td" data-label="Times sold">
                       {s.timesSold}
                       {s.bundleSold > 0 && (
