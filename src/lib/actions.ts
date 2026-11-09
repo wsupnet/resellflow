@@ -1539,6 +1539,13 @@ export async function detectTimezone(tz: string) {
   await prisma.settings.updateMany({ where: { userId: user.id, timezone: null }, data: { timezone: tz } });
 }
 
+/** Dismiss the "what's new" popup: the user has now seen the running version. */
+export async function markWhatsNewSeen() {
+  const user = await requireUser();
+  const { appVersion } = await import("./changelog");
+  await prisma.user.update({ where: { id: user.id }, data: { seenVersion: appVersion() } });
+}
+
 /** Change the signed-in user's password. Signs out every other session (by
  *  bumping sessionVersion) and re-issues this browser's cookie so it stays in. */
 export async function changePassword(fd: FormData): Promise<{ error?: string }> {

@@ -58,6 +58,8 @@ COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
 COPY --from=builder /app/node_modules/@img ./node_modules/@img
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist
+# Release notes for the in-app "what's new" popup (lib/changelog.ts).
+COPY --from=builder /app/CHANGELOG.md ./CHANGELOG.md
 
 # Writable dirs for uploaded item photos + the Next cache.
 RUN mkdir -p /app/uploads /app/secrets /app/.next/cache

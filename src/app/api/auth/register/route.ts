@@ -6,6 +6,7 @@ import { clientIp, recordFailure, retryAfter } from "@/lib/ratelimit";
 import { isCrossSite, isJson } from "@/lib/origin";
 import { passwordProblem } from "@/lib/password";
 import { normalizeEmail } from "@/lib/email";
+import { WELCOME } from "@/lib/changelog";
 import { readJsonLimited } from "@/lib/body";
 import { markHasData } from "@/lib/datadir";
 
@@ -37,7 +38,7 @@ async function createFirstAdmin(email: string, passwordHash: string, displayName
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SETUP_LOCK})`;
     if ((await tx.user.count()) > 0) throw new SetupDone();
     return tx.user.create({
-      data: { email, passwordHash, displayName: displayName || "Admin", isAdmin: true, settings: { create: {} } }
+      data: { email, passwordHash, displayName: displayName || "Admin", isAdmin: true, seenVersion: WELCOME, settings: { create: {} } }
     });
   });
 }
@@ -124,6 +125,7 @@ export async function POST(req: Request) {
           email: lowerEmail,
           passwordHash,
           displayName: displayName || null,
+          seenVersion: WELCOME, // new account: a welcome instead of the release backlog
           settings: { create: {} }
         }
       });

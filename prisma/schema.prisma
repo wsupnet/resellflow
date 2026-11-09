@@ -19,6 +19,10 @@ model User {
   // previously issued session stops working.
   sessionVersion Int    @default(0)
   createdAt    DateTime @default(now())
+  // Last app version whose "what's new" this user dismissed (CHANGELOG.md).
+  // "welcome" = new account, not yet welcomed; null = account from before this
+  // existed (treated as having seen 0.1.0). See lib/changelog.ts.
+  seenVersion  String?
 
   purchases    Purchase[]
   items        Item[]

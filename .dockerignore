@@ -18,6 +18,8 @@ demo-out
 .env.*
 .claude
 *.md
+# …except the changelog, which the app reads for its "what's new" popup.
+!CHANGELOG.md
 scripts/demo
 deploy
 docker-compose*.yml

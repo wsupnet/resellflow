@@ -9,6 +9,7 @@ import ChangePasswordForm from "@/components/ChangePasswordForm";
 import SignOutEverywhere from "@/components/SignOutEverywhere";
 import { shortDate } from "@/lib/format";
 import TimezoneField from "@/components/TimezoneField";
+import { appVersion } from "@/lib/changelog";
 import { allTimezones, momentToDay, DEFAULT_TZ, isValidTz } from "@/lib/tz";
 
 export const dynamic = "force-dynamic";
@@ -224,6 +225,8 @@ export default async function SettingsPage() {
           <SignOutEverywhere />
         </div>
       </div>
+
+      <p className="text-xs text-slate-400">ResellFlow version {appVersion()}</p>
     </div>
   );
 }

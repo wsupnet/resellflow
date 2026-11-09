@@ -77,6 +77,7 @@ Facebook. Built to solve the things a spreadsheet can't:
 | [Inviting family & friends](#inviting-family--friends) | Invite-only accounts with private data per user |
 | [Importing your existing data](#importing-your-existing-data) | CSV import and backup restore |
 | [How the money math works](#how-the-money-math-works) | How lot costs, fees and ROI are calculated |
+| [Changelog](CHANGELOG.md) | What changed in each version. After an update, each user sees the new entries once in a "What's new" popup |
 
 ## Quick start
 

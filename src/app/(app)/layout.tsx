@@ -7,6 +7,8 @@ import Nav from "@/components/Nav";
 import Toaster from "@/components/Toaster";
 import ThemeSync from "@/components/ThemeSync";
 import TzSync from "@/components/TzSync";
+import WhatsNew from "@/components/WhatsNew";
+import { whatsNewFor, appVersion } from "@/lib/changelog";
 import { CurrencyPrefsProvider } from "@/components/CurrencyPrefs";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +17,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const flash = await readFlash();
   const [currency, prefs] = await Promise.all([getViewCurrency(user.id), getCurrencyPrefs(user.id)]);
   const settings = await prisma.settings.findUnique({ where: { userId: user.id }, select: { theme: true, timezone: true } });
+  // Shown once per update (or once as a welcome for a new account).
+  const seen = await prisma.user.findUnique({ where: { id: user.id }, select: { seenVersion: true } });
+  const whatsNew = whatsNewFor(seen?.seenVersion ?? null);
 
   return (
     <div className="min-h-screen">
@@ -25,6 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Toaster flash={flash} />
       <ThemeSync theme={settings?.theme ?? "light"} />
       <TzSync needed={!settings?.timezone} />
+      {whatsNew && <WhatsNew kind={whatsNew.kind} entries={whatsNew.entries} version={appVersion()} />}
     </div>
   );
 }
