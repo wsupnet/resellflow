@@ -22,9 +22,9 @@ export default async function PrivacySettings() {
         </SectionTitle>
         <ul className="divide-y divide-slate-100 text-sm">
           <li className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span className="flex items-center gap-1.5 font-medium">
-              Exchange rate fetching
-              <InfoTip text="A request for the USD/JPY rate to open.er-api.com, about hourly. No data of yours is sent." />
+            <span>
+              <span className="font-medium">Exchange rate fetching</span>
+              <span className="block text-xs text-slate-500">A request for the USD/JPY rate to open.er-api.com, about hourly. No data of yours is sent.</span>
             </span>
             <span className="flex items-center gap-3">
               <OnOff on={settings.fxLive} />
@@ -32,9 +32,9 @@ export default async function PrivacySettings() {
             </span>
           </li>
           <li className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span className="flex items-center gap-1.5 font-medium">
-              Online barcode lookup
-              <InfoTip text="A scanned barcode that isn't already in your catalog, sent to OpenLibrary, MusicBrainz and UPCitemdb." />
+            <span>
+              <span className="font-medium">Online barcode lookup</span>
+              <span className="block text-xs text-slate-500">A scanned barcode that isn&apos;t already in your catalog, sent to OpenLibrary, MusicBrainz and UPCitemdb.</span>
             </span>
             <OnOff on={settings.upcLookup} />
           </li>

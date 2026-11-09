@@ -13,6 +13,7 @@ bump `package.json` to match when you add one.
 - **Family suggestions**: the app spots products with matching names (for example "New 3DS LL - Blue" and "NEW 3DS LL - Burgundy") and offers to group them. Accept, rename, or say **Not a family**.
 - **Families in Insights**: switch Insights to **Families** to rank each family as one combined row.
 - **Deal Checker uses family sales**: scan a version you've never sold, and if another version in its family has sold, you can use that as the benchmark for a verdict.
+- **Clearer privacy settings**: Settings → Locations and the "What leaves your server" list show their descriptions on screen again instead of behind a **?**.
 
 ## 0.2.1 — 2026-11-09
 
