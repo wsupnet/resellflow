@@ -77,7 +77,11 @@ sales add up to it, so there are no mystery totals.
   "times sold" stays accurate even if you named them slightly differently
 - Multi-select and bulk-edit
 - Each item gets its own page with photos and a **full profit breakdown**: sale price, each fee,
-  attached expenses, cost of goods, and net
+  attached expenses, cost of goods, and net. Everything about the item can be edited there,
+  including its purchase date, source, location and price paid (for an item from a lot, those
+  apply to the whole lot)
+- Each product gets a page listing every unit you've had of it, so with several copies you can
+  pick which one to open or edit
 
 ### 🧺 Lots & purchases
 
@@ -122,11 +126,11 @@ sales add up to it, so there are no mystery totals.
 ![Deal Checker](screenshots/desktop-deal-checker.png)
 
 - Search or **scan a barcode with your phone camera**
-- See your own history for that product: times sold, average sale price, and whether it's been
-  selling above or below normal lately
+- Lists the products you've sold at least once, with your own history for each: times sold,
+  average sale price, and whether it's been selling above or below normal lately
 - Prices show in whichever currency you're viewing
 - Enter the asking price (in **dollars or yen**) for a verdict from *"Buy it 🔥"* down to *"Rethink it"*,
-  based on your real sale history or a comp price you paste in
+  based on your real sale history, or a comp price you paste in to override it
 
 ### 🧾 General ledger
 

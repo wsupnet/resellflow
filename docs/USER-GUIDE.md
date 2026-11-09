@@ -32,7 +32,10 @@ Setting it up? See the [README](../README.md#quick-start) or [Hosting on a NAS](
    email and a password (at least 12 characters) to create the admin account. Only the admin
    can invite other people. (If whoever set up the server put `ADMIN_EMAIL` / `ADMIN_PASSWORD`
    in `.env`, the admin already exists: sign in with those instead.)
-3. To change your password later: **Settings → Account**. Enter your current password, then
+3. The first time you sign in, a short **Welcome** lists what the app can do. After each update
+   you'll see a **What's new** popup once, listing what changed. Close it with **Got it**. The
+   version you're running is shown at the bottom of **Settings → Account**.
+4. To change your password later: **Settings → Account**. Enter your current password, then
    the new one twice. Changing it signs out any other devices.
 
 After 10 wrong passwords for the same account, sign-in pauses for 15 minutes. That slows down

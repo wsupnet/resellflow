@@ -29,8 +29,9 @@ Facebook. Built to solve the things a spreadsheet can't:
   today's rate or the rate locked in on each purchase and sale, on every screen.
 - **Good-deal checker.** Yen↔USD converter (your own rate, or fetched if you opt
   in) plus a verdict on whether you're
-  over/underpaying, based on your own sale history or a comp you paste in. It
-  shows prices in whichever currency you're viewing.
+  over/underpaying, based on your own sale history for products you've sold (or
+  a comp you paste in to override it). It shows prices in whichever currency
+  you're viewing.
 - **Buy-more insights.** Ranks what you should source more of by a blended score,
   with toggles to view by total profit, ROI, or how often it sells. Bundle sales
   are tagged, an **Individual only** filter leaves them out, and ROI needs 3+ sales

@@ -229,7 +229,8 @@ folder — they're real business data.
   Data under `DATA_DIR` is untouched by both steps. If an update would delete data
   from the database, the app refuses to start and says so in
   `sudo docker compose logs app` — see "Updates that change the database" in the
-  [README](../README.md#updates-that-change-the-database).
+  [README](../README.md#updates-that-change-the-database). After an update, each user
+  sees a one-time **What's new** popup listing the changes (from `CHANGELOG.md`).
 - **Updating from a version before the October 2026 security update:**
   - Add `APP_BIND=0.0.0.0` to `.env` if you open the app by `http://<NAS-IP>:<APP_PORT>`.
     The Tailscale URL works either way.
