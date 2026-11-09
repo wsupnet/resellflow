@@ -11,7 +11,9 @@ export default async function DealCheckerPage() {
   const [variants, fx, currency] = await Promise.all([getVariantStats(user.id), getFxRate(user.id), getViewCurrency(user.id)]);
 
   // One row per variant (product, or product+condition for tracked categories).
-  const products: DealProduct[] = variants.map((v) => ({
+  // Only variants with at least one real sale: unsold stock (even with a manual
+  // comp) and write-offs have no sale history to judge a deal against.
+  const products: DealProduct[] = variants.filter((v) => v.timesSold > 0).map((v) => ({
     key: v.key,
     productId: v.productId,
     name: v.name,

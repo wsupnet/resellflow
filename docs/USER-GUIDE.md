@@ -265,8 +265,9 @@ For deeper analysis, open **Analytics**:
 Standing in a store wondering whether something is worth buying? Open **Deal Checker** on your phone.
 
 1. **Find the product.** Tap scan and point the camera at the barcode, or search by name or SKU.
-   If you've handled it before, you'll see your history: times sold, average sale price, and
-   whether it's been selling above or below its usual price lately.
+   Only products you've actually sold at least once are listed (unsold stock and lost or damaged
+   items are left out). You'll see your history: times sold, average sale price, and whether it's
+   been selling above or below its usual price lately.
 2. **Enter the asking price** in dollars or yen. The built-in **Currency converter** uses today's rate.
    Your history (average sale price, recent average, and so on) shows in whichever currency you're
    viewing, converted at today's rate. With only one currency in use, the converter and the $/¥ picker
@@ -280,12 +281,14 @@ Standing in a store wondering whether something is worth buying? Open **Deal Che
    | **Maybe** | Up to 100%: thin once fees come out |
    | **Rethink it** | More than it sells for: you'd likely lose money |
 
-**Never sold one before?** There's no history to compare against yet. Look up recent sold prices
-(eBay sold listings, 130point, and so on), then use **Set manual comp (sold price) → Save comp** on
-that product. The Deal Checker uses your comp from then on.
+**Want a different benchmark?** By default the verdict compares against your average sale price.
+If the market has moved, look up recent sold prices (eBay sold listings, 130point, and so on), then
+use **Set manual comp (sold price) → Save comp** on that product. The Deal Checker uses your comp
+from then on.
 
-**Scanned something new?** If no item has that barcode yet, add it in **Inventory** so its history
-starts building.
+**Never sold one before, or scanned something new?** It won't show up here until you've sold one,
+because there's no history to compare against. Add it in **Inventory** so its history starts
+building once it sells.
 
 ---
 

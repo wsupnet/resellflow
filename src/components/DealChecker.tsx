@@ -58,7 +58,7 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
     if (hits.length === 1) {
       setSelected(hits[0]);
       setQuery(hits[0].name);
-      setScanMsg(`Matched by SKU — you've handled this ${hits[0].timesSold}× before.`);
+      setScanMsg(`Matched by SKU — you've sold this ${hits[0].timesSold}× before.`);
     } else if (hits.length > 1) {
       // Same barcode, multiple conditions — let them pick which one.
       setSelected(null);
@@ -67,7 +67,7 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
     } else {
       setSelected(null);
       setQuery(code);
-      setScanMsg(`No item tagged with ${code} yet. Tag one in Inventory to track it.`);
+      setScanMsg(`No sold item tagged with ${code} yet. Only items you've sold are listed here.`);
     }
   }
 
@@ -127,10 +127,10 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
       <div className="card">
         <h2 className="mb-1 text-lg font-semibold">Is this a good deal?</h2>
         <p className="mb-3 text-xs text-slate-400">
-          Compares a candidate buy price against what you usually sell this item for (or your manual comp).
+          Compares a candidate buy price against what you usually sell this item for (or your manual comp). Only items you've sold are listed.
         </p>
 
-        <label className="label">Search your items or scan</label>
+        <label className="label">Search your sold items or scan</label>
         <div className="flex gap-2">
           <input
             value={query}
