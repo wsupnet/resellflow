@@ -17,9 +17,12 @@ export default function ProductRename({ productId, name }: { productId: string; 
         type="button"
         onClick={() => setOpen(true)}
         title="Rename this product (applies to all conditions)"
-        className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-medium text-slate-500 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+        aria-label="Rename this product"
+        className="shrink-0 rounded p-1 text-slate-400 hover:bg-brand-50 hover:text-brand-700"
       >
-        ✎ Rename
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden>
+          <path d="M13.5 3.5l3 3L7 16H4v-3z" />
+        </svg>
       </button>
     );
   }

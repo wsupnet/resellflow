@@ -369,12 +369,12 @@ export default async function InventoryPage(
                               {g.baseName}
                             </Link>
                             {g.productId && <ProductRename productId={g.productId} name={g.baseName} />}
-                            {g.familyId && familyName.has(g.familyId) && (
-                              <Link href={`/families/${g.familyId}`} className="pill bg-indigo-50 text-indigo-700 hover:bg-indigo-100" title="Family">
-                                {familyName.get(g.familyId)}{g.familyLabel ? ` · ${g.familyLabel}` : ""}
-                              </Link>
-                            )}
                           </div>
+                          {g.familyId && familyName.has(g.familyId) && (
+                            <Link href={`/families/${g.familyId}`} className="mt-0.5 block text-xs text-slate-400 hover:text-brand-600" title="Family">
+                              ↳ {familyName.get(g.familyId)}{g.familyLabel ? ` · ${g.familyLabel}` : ""}
+                            </Link>
+                          )}
                           {(() => {
                             const parts = [...g.condInStock.entries()].filter(([, n]) => n > 0);
                             // Only show a breakdown when stock actually spans 2+ conditions.

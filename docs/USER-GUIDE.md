@@ -177,7 +177,9 @@ another product, so their sales history isn't split in two:
 - **Filters** button: narrow by category, condition, location, missing info, and more
 - **By item / By product**: see each copy separately, or grouped by product with stock counts.
   Click a product to open its page, which lists every unit you've had of it (purchase date,
-  where it came from, cost, sale) with an **Edit** link for each one
+  where it came from, cost, sale) with an **Edit** link for each one. The pencil next to a
+  product renames it, and a product in a family shows the family's name underneath (click it
+  to open the family)
 - **Search** by name or SKU
 - **Edit** on any row: change status, category, condition, barcode, estimated value, cost override or notes
 - **Bulk edit**: tick several rows and change them all at once

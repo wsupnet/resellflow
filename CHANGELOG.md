@@ -7,6 +7,10 @@ Format: one `## <version> — <date>` heading per release (newest first), then
 `- **Title**: description` bullets. The newest heading is the app's version, so
 bump `package.json` to match when you add one.
 
+## 0.3.1 — 2026-11-09
+
+- **Tidier By product list**: a product's family now shows as a small line under its name instead of a large badge, and the Rename button is a small pencil icon.
+
 ## 0.3.0 — 2026-11-09
 
 - **Product families**: group different products that are really the same thing, like the US and Japan releases of an album or the colours of a console. Each keeps its own barcode and profits; the family shows them side by side with combined totals ("sold 5 across US, Japan, Mexico"). Find them under **Inventory → By family**.
