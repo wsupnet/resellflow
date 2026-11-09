@@ -53,13 +53,16 @@ HTTPS section of [Hosting on a NAS](DEPLOY-NAS.md).
 
 Do this once, before you record sales, so fees are calculated correctly.
 
-1. Go to **Settings → Selling fees**.
-2. Check each rate against what your platforms actually charge you:
+**Settings** has a menu of sections down the left (a **Section** picker at the top on a phone).
+Each section has its own Save button and saves only its own settings.
+
+1. **Selling fees**: check each rate against what your platforms actually charge you, then
+   **Save fees**:
    - **eBay final value fee (%)** and **eBay flat fee per order ($)**
    - **eBay ad fee (%)**, if you use promoted listings
    - **Mercari fee (%)**
    - **Default shipping ($)**
-3. Pick your display options:
+2. **Currency**, then **Save currency**:
    - **Primary currency**: USD or yen. Amounts show in it, and entry forms start in it.
    - **Second currency**: *On* adds the **$ / ¥** toggle in the top bar and a currency picker on each entry
      form. *None* hides both, so everything uses your primary currency. Amounts already entered in the other
@@ -70,20 +73,21 @@ Do this once, before you record sales, so fees are calculated correctly.
      Update it now and then, or tick **Fetch today's rate automatically** to have the server get it
      about once an hour from open.er-api.com (a free exchange-rate service). Off by default: when
      it's off, nothing is sent anywhere.
+3. **Preferences**, then **Save preferences**:
    - **Theme**: Light, Off-white, Dark, or follow your device
    - **Timezone**: filled in from your browser the first time you sign in; change it any time
      (**Use this device's** switches to the device you're on). It decides what "today" is when you
      leave a date blank, and where days, months and years start for the dashboard and reports. Dates
      you type in always stay exactly the day you picked.
-4. Optional: **Look up unknown barcodes online.** Barcodes you've scanned before always fill in
-   from your own catalog, privately. With this on, a barcode that isn't in your catalog is also
-   sent to OpenLibrary (books), MusicBrainz (music) and UPCitemdb (retail) to suggest a name. Off by
-   default.
-5. Click **Save settings**.
+4. Optional, under **Barcodes & privacy**: **Look up unknown barcodes online.** Barcodes you've
+   scanned before always fill in from your own catalog, privately. With this on, a barcode that
+   isn't in your catalog is also sent to OpenLibrary (books), MusicBrainz (music) and UPCitemdb
+   (retail) to suggest a name. Off by default. The same page lists everything that can leave your
+   server and whether it's on.
 
 Changing fee rates later never rewrites past sales. Each sale keeps the fees it was recorded with.
 
-**Sourcing locations (optional):** **Settings → Sourcing locations → Manage locations** lets
+**Sourcing locations (optional):** **Settings → Locations → Manage locations** lets
 you keep a list of specific stores or sales (for example "Book Off Downtown") so you can later
 see which places make you the most money. You can also create them on the fly while adding items.
 
@@ -314,7 +318,7 @@ Back up regularly, and always before updating the app.
 
 ### From the app (easiest)
 
-1. **Settings → Export & import → Full backup & restore**.
+1. **Settings → Data → Backup & restore**.
 2. Click **Download .zip (with photos)** for everything, or **Download .json (data only)** for a smaller file.
 3. Keep the file somewhere safe: another drive, cloud storage, and so on.
 

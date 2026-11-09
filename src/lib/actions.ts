@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import { mkdir, writeFile, unlink } from "fs/promises";
 import { prisma } from "./db";
+import type { Prisma } from "@prisma/client";
 import { requireUser, createSession, destroySession, hashPassword, verifyPassword } from "./auth";
 import { passwordProblem } from "./password";
 import { normalizeKey, similarity } from "./normalize";
@@ -1468,60 +1469,51 @@ export async function deleteLocation(fd: FormData) {
 
 // ─────────────── settings & invites ───────────────
 
+/**
+ * Save one Settings section. The form names its section, and only that
+ * section's fields are written — so saving fees can never reset the theme, an
+ * unticked checkbox elsewhere, etc.
+ */
 export async function updateSettings(fd: FormData) {
   const user = await requireUser();
-  const pctFromForm = (k: string) => {
-    const n = num(fd.get(k));
-    return n == null ? undefined : n / 100; // form is in %, stored as fraction
-  };
-  const upcLookup = fd.get("upcLookup") != null;
-  const homeCurrency = str(fd.get("homeCurrency")) === "JPY" ? "JPY" : "USD";
-  const singleCurrency = str(fd.get("secondCurrency")) === "none";
-  const fxMode = str(fd.get("fxMode")) === "historical" ? "historical" : "live";
-  const fxLive = fd.get("fxLive") != null;
-  const manualRate = num(fd.get("fxManualRate"));
-  const fxManualRate = manualRate != null && manualRate > 0 && manualRate < 10000 ? manualRate : undefined;
-  const theme = ["light", "cream", "dark", "system"].includes(str(fd.get("theme"))) ? str(fd.get("theme")) : "light";
-  // Only touched when the form sends a valid zone; otherwise the saved one stays.
-  const timezone = isValidTz(str(fd.get("timezone"))) ? str(fd.get("timezone")) : undefined;
-  // The root layout renders the theme from this cookie (no flash of wrong theme).
-  (await cookies()).set("theme", theme, { path: "/", maxAge: 31536000, sameSite: "lax" });
-  await prisma.settings.upsert({
-    where: { userId: user.id },
-    update: {
-      ebayFeePct: pctFromForm("ebayFeePct"),
-      mercariFeePct: pctFromForm("mercariFeePct"),
-      adFeePct: pctFromForm("adFeePct"),
-      ebayFlatFee: num(fd.get("ebayFlatFee")) ?? undefined,
-      defaultShipping: num(fd.get("defaultShipping")) ?? undefined,
-      upcLookup,
-      homeCurrency,
-      singleCurrency,
-      fxMode,
-      fxLive,
-      fxManualRate,
-      theme,
-      timezone
-    },
-    create: {
-      userId: user.id,
-      ebayFeePct: pctFromForm("ebayFeePct") ?? 0.1325,
-      mercariFeePct: pctFromForm("mercariFeePct") ?? 0.1,
-      adFeePct: pctFromForm("adFeePct") ?? 0.02,
-      ebayFlatFee: num(fd.get("ebayFlatFee")) ?? 0.4,
-      defaultShipping: num(fd.get("defaultShipping")) ?? 0,
-      upcLookup,
-      homeCurrency,
-      singleCurrency,
-      fxMode,
-      fxLive,
-      fxManualRate,
-      theme,
-      timezone
-    }
-  });
+  const section = str(fd.get("section"));
+  const data: Prisma.SettingsUpdateInput = {};
+
+  if (section === "fees") {
+    const pctFromForm = (k: string) => {
+      const n = num(fd.get(k));
+      return n == null ? undefined : n / 100; // form is in %, stored as fraction
+    };
+    data.ebayFeePct = pctFromForm("ebayFeePct");
+    data.mercariFeePct = pctFromForm("mercariFeePct");
+    data.adFeePct = pctFromForm("adFeePct");
+    data.ebayFlatFee = num(fd.get("ebayFlatFee")) ?? undefined;
+    data.defaultShipping = num(fd.get("defaultShipping")) ?? undefined;
+  } else if (section === "currency") {
+    data.homeCurrency = str(fd.get("homeCurrency")) === "JPY" ? "JPY" : "USD";
+    data.singleCurrency = str(fd.get("secondCurrency")) === "none";
+    data.fxMode = str(fd.get("fxMode")) === "historical" ? "historical" : "live";
+    data.fxLive = fd.get("fxLive") != null;
+    const manualRate = num(fd.get("fxManualRate"));
+    if (manualRate != null && manualRate > 0 && manualRate < 10000) data.fxManualRate = manualRate;
+  } else if (section === "preferences") {
+    const theme = ["light", "cream", "dark", "system"].includes(str(fd.get("theme"))) ? str(fd.get("theme")) : "light";
+    data.theme = theme;
+    // The root layout renders the theme from this cookie (no flash of wrong theme).
+    (await cookies()).set("theme", theme, { path: "/", maxAge: 31536000, sameSite: "lax" });
+    // Only touched when the form sends a valid zone; otherwise the saved one stays.
+    if (isValidTz(str(fd.get("timezone")))) data.timezone = str(fd.get("timezone"));
+  } else if (section === "privacy") {
+    data.upcLookup = fd.get("upcLookup") != null;
+  } else {
+    throw new Error("Unknown settings section");
+  }
+
+  // Create with schema defaults first if the account has no settings row yet.
+  await prisma.settings.upsert({ where: { userId: user.id }, update: {}, create: { userId: user.id } });
+  await prisma.settings.update({ where: { userId: user.id }, data });
   await setFlash("Settings saved");
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
 }
 
 /**

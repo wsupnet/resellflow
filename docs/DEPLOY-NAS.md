@@ -237,7 +237,7 @@ folder — they're real business data.
     the line to have one generated into `secrets/` (everyone signs in once more).
     The app now refuses to start with the `.env.example` placeholder or a secret
     shorter than 32 characters, and says so in the logs.
-  - **Settings → Today's rate** starts at ¥150 per $1 with automatic fetching off.
+  - **Settings → Currency → Today's rate** starts at ¥150 per $1 with automatic fetching off.
     Set your own rate, or tick *Fetch today's rate automatically*.
   - Account emails are now matched exactly, lowercased. The first boot lowercases
     any stored email that has capitals (logged as "Normalized account email …").

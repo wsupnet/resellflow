@@ -144,15 +144,19 @@ sales add up to it, so there are no mystery totals.
 
 ### ⚙️ Settings
 
-- **Fees**: eBay, Mercari, ad and default shipping rates (past sales keep the rates they were recorded with)
-- **Display**: USD or yen as your primary currency, the other one as an optional second (or turn it off),
-  today's or historical exchange rate (your own rate, or fetched automatically if
-  you opt in), light/dark/off-white theme
-- **Privacy**: outside services (exchange rate, online barcode lookup) are off until you switch them on
-- **Export & import**: CSV export of inventory, sales, lots and expenses; CSV import; full
-  backup and restore (including photos)
-- **Invites** (admin): registration is invite-only
+A menu of sections down the left (a picker on phones), each with its own Save button:
+
+- **Selling fees**: eBay, Mercari, ad and default shipping rates (past sales keep the rates they were recorded with)
+- **Currency**: USD or yen as your primary currency, the other one as an optional second (or turn it off),
+  today's or historical exchange rate (your own rate, or fetched automatically if you opt in)
+- **Preferences**: light/dark/off-white theme, and your timezone
+- **Barcodes & privacy**: online barcode lookup, plus a list of everything that can leave your
+  server (off until you switch it on)
+- **Locations**: the places you source from
+- **Data**: CSV export of inventory, sales, lots and expenses; CSV import; full backup and restore
+  (including photos)
 - **Account**: change your password, or sign out of all devices
+- **Invites** (admin): registration is invite-only
 
 ---
 

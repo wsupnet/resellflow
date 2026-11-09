@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { importInventoryCsv, importSalesCsv, restoreBackup, type ImportResult } from "@/lib/actions";
 
-function BackupRestore() {
+export function BackupRestore() {
   const [res, setRes] = useState<{ error?: string; counts?: Record<string, number> } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -105,10 +105,10 @@ function ImportOne({
   );
 }
 
-export default function ImportPanel() {
+/** CSV imports (inventory + sales) with their templates. */
+export function CsvImports() {
   return (
     <div className="space-y-3">
-      <BackupRestore />
       <ImportOne
         label="Import inventory"
         hint="CSV columns: title (required), sku, category, condition, status, source, location, costUsd, costJpy, estimatedValue, purchasedAt, dateApprox (yes = best-guess date), type (personal), notes. Each row creates a new single item."
@@ -124,6 +124,15 @@ export default function ImportPanel() {
       <p className="text-xs text-slate-400">
         Imports are additive — they only create new records and never overwrite existing data. Start from the templates above — they include two example rows to overwrite.
       </p>
+    </div>
+  );
+}
+
+export default function ImportPanel() {
+  return (
+    <div className="space-y-3">
+      <BackupRestore />
+      <CsvImports />
     </div>
   );
 }
