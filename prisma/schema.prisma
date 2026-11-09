@@ -23,6 +23,7 @@ model User {
   // "welcome" = new account, not yet welcomed; null = account from before this
   // existed (treated as having seen 0.1.0). See lib/changelog.ts.
   seenVersion  String?
+  sessions     Session[]
 
   purchases    Purchase[]
   items        Item[]
@@ -34,6 +35,23 @@ model User {
   settings     Settings?
   locations    Location[]
   invitesMade  Invite[]   @relation("InviteCreator")
+}
+
+// One signed-in browser/device. The session cookie names its row (sid), so a
+// session can be listed in Settings → Account and signed out on its own.
+// Cookies from before this existed carry no sid and still work until they expire.
+model Session {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // User.sessionVersion when issued; a password change/reset bumps the user's,
+  // which ends this session too.
+  sessionVersion Int      @default(0)
+  userAgent      String?
+  createdAt      DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Invite {

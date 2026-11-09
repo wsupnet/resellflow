@@ -399,7 +399,12 @@ Invite codes can be used once. Delete any you no longer need from the same list.
   another computer on the same network, whoever runs the server sets `APP_BIND=0.0.0.0` (see the
   [README](../README.md#quick-start)). For use away from home, use Tailscale rather than opening a port
   on your router: see [Hosting on a NAS](DEPLOY-NAS.md#6-https-for-the-phone-camera).
-- **Lost a phone, or signed in on someone else's computer?** **Settings → Account → Sign out of all
-  devices** ends every session for your account, this one included. Then sign in again.
+- **See where you're signed in:** **Settings → Account → Sessions** lists each browser and device
+  signed in to your account, when it signed in and when it was last active, with **This session**
+  marking the one you're using. **Sign out** next to any other session ends it straight away.
+  (Sign-ins from before this list existed aren't shown until they sign in again.)
+- **Lost a phone, or signed in on someone else's computer?** Sign that session out from the list, or
+  use **Settings → Account → Sign out of all devices** to end every session for your account, this one
+  included. Then sign in again.
 - **Sign-in protection:** 10 wrong passwords in a row pauses sign-in for that account for 15 minutes,
   except on browsers you've already signed in with.

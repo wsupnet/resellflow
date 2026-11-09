@@ -15,6 +15,7 @@ bump `package.json` to match when you add one.
 - **Deal Checker uses family sales**: scan a version you've never sold, and if another version in its family has sold, you can use that as the benchmark for a verdict.
 - **Clearer privacy settings**: Settings → Locations and the "What leaves your server" list show their descriptions on screen again instead of behind a **?**.
 - **Roomier dropdowns**: the arrow on every dropdown now sits a little in from the edge.
+- **See your sessions**: Settings → Account → Sessions lists every browser and device signed in to your account, marks **This session**, and lets you sign any other one out.
 
 ## 0.2.1 — 2026-11-09
 

@@ -252,6 +252,9 @@ folder — they're real business data.
 
 - **Change your password** in the app: **Settings → Account**. It needs your
   current password, and signs out every other device.
+- **Settings → Account → Sessions** lists every signed-in browser for that account
+  (marking **This session**), and can sign out any one of them. Sessions are
+  stored in the database's `Session` table.
 - **Sign out of all devices** (Settings → Account) ends every session for that
   account, including the current one — use it after losing a phone.
 - After **10 wrong passwords** for one account, sign-in for that account pauses

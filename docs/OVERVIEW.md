@@ -165,7 +165,8 @@ setting's explanation sits in a **?** tooltip beside it:
 - **Locations**: the places you source from
 - **Data**: CSV export of inventory, sales, lots and expenses; CSV import; full backup and restore
   (including photos)
-- **Account**: change your password, or sign out of all devices
+- **Account**: change your password, see every signed-in session (marked **This session** for yours)
+  and sign any of them out, or sign out of all devices
 - **Invites** (admin): registration is invite-only
 
 ---

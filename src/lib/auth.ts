@@ -21,7 +21,10 @@ function secret(): Uint8Array {
 /** `sessionVersion` must be the user's current value; bumping it in the DB
  *  (password change/reset) invalidates every session issued before. */
 export async function createSession(userId: string, sessionVersion = 0): Promise<void> {
-  const token = await new SignJWT({ uid: userId, sv: sessionVersion, typ: "session" })
+  // A row per sign-in, so Settings → Account can list and end sessions one by one.
+  const userAgent = (await headers()).get("user-agent")?.slice(0, 400) ?? null;
+  const row = await prisma.session.create({ data: { userId, sessionVersion, userAgent } });
+  const token = await new SignJWT({ uid: userId, sv: sessionVersion, sid: row.id, typ: "session" })
     .setProtectedHeader({ alg: ALG })
     .setIssuedAt()
     .setExpirationTime("30d")
@@ -44,8 +47,28 @@ export async function createSession(userId: string, sessionVersion = 0): Promise
 }
 
 export async function destroySession(): Promise<void> {
-  (await cookies()).delete(COOKIE);
+  const jar = await cookies();
+  const sid = await currentSessionId();
+  if (sid) await prisma.session.deleteMany({ where: { id: sid } });
+  jar.delete(COOKIE);
 }
+
+/** The session row id named by this browser's cookie (null for older cookies). */
+export async function currentSessionId(): Promise<string | null> {
+  const token = (await cookies()).get(COOKIE)?.value;
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    return typeof payload.sid === "string" ? payload.sid : null;
+  } catch {
+    return null;
+  }
+}
+
+/** How long a session lives (matches the cookie / token expiry). */
+export const SESSION_DAYS = 30;
+// lastSeenAt is refreshed at most this often, so normal browsing isn't a DB write per request.
+const TOUCH_MS = 5 * 60 * 1000;
 
 // ─── trusted-device cookie (login throttling) ───
 // After a successful sign-in the browser keeps a signed, long-lived "device" cookie
@@ -93,6 +116,8 @@ export interface SessionUser {
   email: string;
   displayName: string | null;
   isAdmin: boolean;
+  /** This browser's session row; null for cookies issued before sessions were tracked. */
+  sessionId: string | null;
 }
 
 /** Returns the logged-in user, or null. */
@@ -105,7 +130,20 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     // which is signed with the same secret.
     if (payload.typ !== undefined && payload.typ !== "session") return null;
     const uid = payload.uid as string;
-    const user = await prisma.user.findUnique({ where: { id: uid } });
+    const sid = typeof payload.sid === "string" ? payload.sid : null;
+    let user;
+    if (sid) {
+      // A tracked session must still exist: signing it out (here or from another
+      // device) deletes the row and ends it immediately.
+      const row = await prisma.session.findUnique({ where: { id: sid }, include: { user: true } });
+      if (!row || row.userId !== uid) return null;
+      user = row.user;
+      if (Date.now() - +row.lastSeenAt > TOUCH_MS) {
+        await prisma.session.update({ where: { id: sid }, data: { lastSeenAt: new Date() } }).catch(() => {});
+      }
+    } else {
+      user = await prisma.user.findUnique({ where: { id: uid } });
+    }
     if (!user) return null;
     // Tokens issued before session versioning carry no `sv`; treat them as 0.
     if (((payload.sv as number | undefined) ?? 0) !== user.sessionVersion) return null;
@@ -113,7 +151,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
-      isAdmin: user.isAdmin
+      isAdmin: user.isAdmin,
+      sessionId: sid
     };
   } catch {
     return null;
@@ -126,3 +165,18 @@ export async function requireUser(): Promise<SessionUser> {
   if (!u) throw new Error("UNAUTHORIZED");
   return u;
 }
+
+/**
+ * The user's open sessions, newest activity first. Rows that can no longer be
+ * used (expired, or from before a password change) are cleared out first.
+ */
+export async function listSessions(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { sessionVersion: true } });
+  if (!user) return [];
+  const cutoff = new Date(Date.now() - SESSION_DAYS * 86400000);
+  await prisma.session.deleteMany({
+    where: { userId, OR: [{ createdAt: { lt: cutoff } }, { sessionVersion: { not: user.sessionVersion } }] }
+  });
+  return prisma.session.findMany({ where: { userId }, orderBy: { lastSeenAt: "desc" } });
+}
+

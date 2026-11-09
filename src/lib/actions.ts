@@ -1575,6 +1575,8 @@ export async function changePassword(fd: FormData): Promise<{ error?: string }> 
     data: { passwordHash: await hashPassword(next), sessionVersion: { increment: 1 } }
   });
   await createSession(updated.id, updated.sessionVersion);
+  // Every other session ended with the version bump; drop their rows too.
+  await prisma.session.deleteMany({ where: { userId: updated.id, sessionVersion: { not: updated.sessionVersion } } });
   return {};
 }
 
@@ -1585,7 +1587,19 @@ export async function signOutEverywhere() {
   const user = await requireUser();
   await prisma.user.update({ where: { id: user.id }, data: { sessionVersion: { increment: 1 } } });
   await destroySession();
+  await prisma.session.deleteMany({ where: { userId: user.id } });
   redirect("/login");
+}
+
+/** End one other session (Settings → Account → Sessions). This browser's own
+ *  session is ended with Sign out instead. */
+export async function signOutSession(fd: FormData) {
+  const user = await requireUser();
+  const id = str(fd.get("sessionId"));
+  if (!id || id === user.sessionId) return;
+  const r = await prisma.session.deleteMany({ where: { id, userId: user.id } });
+  await setFlash(r.count ? "Signed out that session" : "That session had already ended");
+  revalidatePath("/settings/account");
 }
 
 export async function createInvite(fd: FormData) {
