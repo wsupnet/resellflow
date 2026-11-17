@@ -13,6 +13,7 @@ bump `package.json` to match when you add one.
 - **Better family name suggestions**: a suggested family keeps words that are part of the title, so "Pink Floyd - The Wall" is no longer suggested as "Floyd - The Wall".
 - **No more duplicate or empty families**: typing the name of a family you already have adds to it instead of making a second one, and a family left with no products after a move or merge is removed.
 - **Family fixes**: moving a product to another family clears its old version label; the Deal Checker's family list shows each version's condition; and the family highlights in Insights and the Deal Checker are no longer bright white in dark mode.
+- **Empty products are cleaned up**: deleting a product's last item, or the purchase it came from, now removes the empty product as well, so it no longer lingers in its family with nothing in stock.
 
 ## 0.3.0 — 2026-11-09
 

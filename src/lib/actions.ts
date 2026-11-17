@@ -644,7 +644,10 @@ export async function dismissProductMatch(fd: FormData) {
 export async function deleteItem(fd: FormData) {
   const user = await requireUser();
   const id = str(fd.get("id"));
+  const item = await prisma.item.findFirst({ where: { id, userId: user.id }, select: { productId: true } });
   await prisma.item.deleteMany({ where: { id, userId: user.id } });
+  // A product with no items left goes too (and its family, if that empties it).
+  await cleanupProductIfEmpty(item?.productId ?? null);
   await setFlash("Item deleted");
   await rebalanceBundles(user.id);
   revalidateAll();
@@ -693,7 +696,10 @@ export async function updateLot(fd: FormData) {
 export async function deletePurchase(fd: FormData) {
   const user = await requireUser();
   const id = str(fd.get("id"));
+  const items = await prisma.item.findMany({ where: { purchaseId: id, userId: user.id, productId: { not: null } }, select: { productId: true }, distinct: ["productId"] });
   await prisma.purchase.deleteMany({ where: { id, userId: user.id } });
+  // Products with no items left go too (and their families, if that empties them).
+  for (const i of items) await cleanupProductIfEmpty(i.productId);
   await setFlash("Purchase deleted");
   await rebalanceBundles(user.id);
   revalidateAll();

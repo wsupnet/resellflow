@@ -208,6 +208,8 @@ products, each with its own stock and profits. A **family** links them so you ca
   sales, net, ROI and days to sell side by side, a combined total row, and a line such as "sold 5
   across US release, Japan release, Mexico". You can edit labels, remove a product, rename or delete
   the family there. Deleting a family only unlinks its products.
+- **Deleting stock:** when you delete a product's last item (or the purchase it came from), the
+  now-empty product is removed too, so it stops showing in its family with nothing in stock.
 
 **When you list something** on eBay or Mercari, set its status to **Listed** so the dashboard knows
 what's for sale. **Lost or broken?** Set **Lost (write-off)** or **Damaged (write-off)**. Its cost
