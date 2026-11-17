@@ -197,7 +197,7 @@ export default async function InsightsPage(
                   <tr key={s.key} className="border-b border-slate-50">
                     <td className="td cell-main font-medium" data-label="">
                       <Link href={breakdownHref(s)} className="text-slate-800 hover:text-brand-700 hover:underline">{s.name}</Link>
-                      {s.key.startsWith("fam:") && <span className="ml-2 pill bg-indigo-50 text-indigo-700">family</span>}
+                      {s.key.startsWith("fam:") && <span className="ml-2 pill bg-brand-50 text-brand-700">family</span>}
                     </td>
                     <td className="td" data-label="Times sold">
                       {s.timesSold}

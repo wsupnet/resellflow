@@ -197,7 +197,10 @@ products, each with its own stock and profits. A **family** links them so you ca
 
 - **Make one:** on a product's page, use **Family → Add to family** (pick a family or name a new one,
   and give this product a version label such as "Japan release" or "Burgundy"). Or, in **By product**,
-  tick several products and choose **Group into family**.
+  tick several products and choose **Group into family**. Typing the name of a family you already
+  have adds to that family instead of making a second one. A product can be in one family at a time:
+  moving it to another clears its old version label, and a family left with no products (after a
+  move or a product merge) is removed for you.
 - **Suggestions:** **Inventory → By family** lists products whose names match apart from words like
   US / Japan / Blue, and offers to group them. Accept (rename it if you like) or choose **Not a family**,
   and it won't suggest those again. A product's page shows the same hint.

@@ -24,7 +24,7 @@ export default async function ProductPage(props: {
   const user = await requireUser();
   const product = await prisma.product.findFirst({
     where: { id: params.id, userId: user.id },
-    include: { family: { select: { id: true, name: true, products: { select: { id: true } } } } }
+    include: { family: { select: { id: true, name: true, products: { select: { id: true, name: true, familyLabel: true, sku: true } } } } }
   });
   if (!product) notFound();
 
@@ -39,16 +39,17 @@ export default async function ProductPage(props: {
     getMoney(user.id)
   ]);
   // Family: siblings' rollups when in one; otherwise the families to pick from + any suggestion.
-  const siblingIds = new Set((product.family?.products ?? []).map((p) => p.id).filter((id) => id !== product.id));
+  const siblingRows = (product.family?.products ?? []).filter((p) => p.id !== product.id);
+  const siblingIds = new Set(siblingRows.map((p) => p.id));
   const [siblingRoll, families, suggestion] = await Promise.all([
     siblingIds.size ? getFinancials(user.id).then((b) => productRollups(b, siblingIds)) : Promise.resolve(new Map()),
     product.family ? Promise.resolve([]) : prisma.family.findMany({ where: { userId: user.id }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     product.family ? Promise.resolve(null) : familyHintFor(user.id, product.id)
   ]);
-  const siblings = [...siblingIds].map(
-    (id) =>
-      siblingRoll.get(id) ?? {
-        productId: id, name: "(no items)", label: null, sku: null,
+  const siblings = siblingRows.map(
+    (p) =>
+      siblingRoll.get(p.id) ?? {
+        productId: p.id, name: p.name, label: p.familyLabel, sku: p.sku,
         units: 0, inStock: 0, listed: 0, sold: 0, saleSum: 0, totalNet: 0, roiSum: 0, roiN: 0, daysSum: 0, daysN: 0, thumbId: null
       }
   );

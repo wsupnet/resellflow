@@ -28,9 +28,19 @@ export function familyKey(name: string): string {
     .join(" ");
 }
 
-/** A readable family name from a member's name: version words and empty brackets dropped. */
-export function familyNameFrom(name: string): string {
-  const words = new RegExp(`\\b(${[...VARIANT].map((w) => w.replace(/\s+/g, "\\s+")).join("|")})\\b`, "gi");
+// Version words that never belong in a family name, even when every member has them.
+const GENERIC = new Set(["release", "version", "ver", "region", "import", "imported", "color", "colour"]);
+
+/**
+ * A readable family name from its members' names: the shortest name with the
+ * version words dropped. A version word every member shares is part of the
+ * title ("Pink Floyd", "Green Day"), so it stays.
+ */
+export function familyNameFrom(names: string[]): string {
+  const name = [...names].sort((a, b) => a.length - b.length)[0] ?? "";
+  const tokens = names.map((n) => new Set(n.toLowerCase().match(/[a-z0-9]+/g) ?? []));
+  const strip = [...VARIANT].filter((w) => GENERIC.has(w) || !tokens.every((t) => t.has(w)));
+  const words = new RegExp(`\\b(${strip.join("|")})\\b`, "gi");
   return (
     name
       .replace(words, " ")
@@ -179,8 +189,7 @@ export async function familySuggestions(userId: string): Promise<FamilySuggestio
     } else {
       const keep = loose.filter((p) => loose.some((q) => q.id !== p.id && !dismissed(p, q)));
       if (keep.length >= 2) {
-        const sorted = [...keep].sort((a, b) => a.name.length - b.name.length);
-        out.push({ kind: "new", name: familyNameFrom(sorted[0].name), products: keep.map((p) => ({ id: p.id, name: p.name })) });
+        out.push({ kind: "new", name: familyNameFrom(keep.map((p) => p.name)), products: keep.map((p) => ({ id: p.id, name: p.name })) });
       }
     }
   }

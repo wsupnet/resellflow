@@ -7,9 +7,12 @@ Format: one `## <version> — <date>` heading per release (newest first), then
 `- **Title**: description` bullets. The newest heading is the app's version, so
 bump `package.json` to match when you add one.
 
-## 0.3.1 — 2026-11-09
+## 0.3.1 — 2026-11-17
 
 - **Tidier By product list**: a product's family now shows as a small line under its name instead of a large badge, and the Rename button is a small pencil icon.
+- **Better family name suggestions**: a suggested family keeps words that are part of the title, so "Pink Floyd - The Wall" is no longer suggested as "Floyd - The Wall".
+- **No more duplicate or empty families**: typing the name of a family you already have adds to it instead of making a second one, and a family left with no products after a move or merge is removed.
+- **Family fixes**: moving a product to another family clears its old version label; the Deal Checker's family list shows each version's condition; and the family highlights in Insights and the Deal Checker are no longer bright white in dark mode.
 
 ## 0.3.0 — 2026-11-09
 

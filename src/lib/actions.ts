@@ -382,7 +382,10 @@ export async function addLooseLotItems(fd: FormData): Promise<{ added: number }>
 async function cleanupProductIfEmpty(productId: string | null) {
   if (!productId) return;
   const count = await prisma.item.count({ where: { productId } });
-  if (count === 0) await prisma.product.delete({ where: { id: productId } }).catch(() => {});
+  if (count > 0) return;
+  const p = await prisma.product.findUnique({ where: { id: productId }, select: { userId: true, familyId: true } });
+  await prisma.product.delete({ where: { id: productId } }).catch(() => {});
+  if (p) await pruneEmptyFamilies(p.userId, [p.familyId]);
 }
 
 /**
@@ -601,6 +604,7 @@ export async function mergeProducts(fd: FormData) {
     // Master-name model: every item in the merged group takes the chosen name.
     await tx.item.updateMany({ where: { productId: keep.id, userId: user.id }, data: { title: name } });
   }, { timeout: 30000, maxWait: 10000 });
+  await pruneEmptyFamilies(user.id, products.map((p) => p.familyId));
 
   await setFlash(`Merged ${products.length} products into “${name}”`);
   revalidateAll();
@@ -1630,11 +1634,22 @@ async function resolveFamily(userId: string, fd: FormData): Promise<string | nul
     const f = await prisma.family.findFirst({ where: { id: familyId, userId } });
     return f?.id ?? null;
   }
-  const name = str(fd.get("newFamilyName")) || str(fd.get("name"));
+  const name = (str(fd.get("newFamilyName")) || str(fd.get("name"))).slice(0, 200);
   if (!name) return null;
-  const f = await prisma.family.create({ data: { userId, name: name.slice(0, 200) } });
+  // A name that's already a family means that family, not a second one with the same name.
+  const same = await prisma.family.findFirst({ where: { userId, name: { equals: name, mode: "insensitive" } } });
+  if (same) return same.id;
+  const f = await prisma.family.create({ data: { userId, name } });
   return f.id;
 }
+
+/** Delete the given families if nothing is left in them (after a move, merge or product delete). */
+async function pruneEmptyFamilies(userId: string, familyIds: (string | null)[]) {
+  const ids = [...new Set(familyIds.filter((x): x is string => !!x))];
+  if (ids.length) await prisma.family.deleteMany({ where: { id: { in: ids }, userId, products: { none: {} } } });
+}
+
+const familyLabelOf = (fd: FormData) => str(fd.get("label")).slice(0, 100) || null;
 
 function revalidateFamilies() {
   for (const p of ["/inventory", "/insights", "/deal-checker"]) revalidatePath(p);
@@ -1652,7 +1667,8 @@ export async function setProductFamily(fd: FormData) {
     await setFlash("Pick a family, or type a name for a new one");
     return;
   }
-  await prisma.product.update({ where: { id: product.id }, data: { familyId, familyLabel: str(fd.get("label")) || null } });
+  await prisma.product.update({ where: { id: product.id }, data: { familyId, familyLabel: familyLabelOf(fd) } });
+  if (product.familyId !== familyId) await pruneEmptyFamilies(user.id, [product.familyId]);
   await setFlash("Added to family");
   revalidateFamilies();
 }
@@ -1661,8 +1677,8 @@ export async function setProductFamily(fd: FormData) {
 export async function setFamilyLabel(fd: FormData) {
   const user = await requireUser();
   await prisma.product.updateMany({
-    where: { id: str(fd.get("productId")), userId: user.id },
-    data: { familyLabel: str(fd.get("label")) || null }
+    where: { id: str(fd.get("productId")), userId: user.id, familyId: { not: null } },
+    data: { familyLabel: familyLabelOf(fd) }
   });
   await setFlash("Label saved");
   revalidateFamilies();
@@ -1687,14 +1703,24 @@ export async function groupIntoFamily(fd: FormData) {
     await setFlash("Tick at least one product first");
     return;
   }
+  // Check the products first, so a bad request can't leave an empty family behind.
+  const owned = await prisma.product.findMany({ where: { id: { in: ids }, userId: user.id }, select: { id: true, familyId: true } });
+  if (owned.length === 0) {
+    await setFlash("Tick at least one product first");
+    return;
+  }
   const familyId = await resolveFamily(user.id, fd);
   if (!familyId) {
     await setFlash("Pick a family, or type a name for a new one");
     return;
   }
-  const r = await prisma.product.updateMany({ where: { id: { in: ids }, userId: user.id }, data: { familyId } });
+  // Products coming from another family drop that family's version label.
+  const moving = owned.filter((p) => p.familyId !== familyId);
+  await prisma.product.updateMany({ where: { id: { in: moving.map((p) => p.id) }, userId: user.id }, data: { familyId, familyLabel: null } });
+  await pruneEmptyFamilies(user.id, moving.map((p) => p.familyId));
   const fam = await prisma.family.findUnique({ where: { id: familyId }, select: { name: true } });
-  await setFlash(`${r.count} product${r.count === 1 ? "" : "s"} added to “${fam?.name ?? "family"}”`);
+  const n = owned.length;
+  await setFlash(`${n} product${n === 1 ? "" : "s"} ${moving.length ? "added to" : "already in"} “${fam?.name ?? "family"}”`);
   revalidateFamilies();
 }
 

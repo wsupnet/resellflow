@@ -27,7 +27,7 @@ export interface DealProduct {
 }
 
 /** How a family member is named in the reference list. */
-const versionName = (p: DealProduct) => p.familyLabel || p.name;
+const versionName = (p: DealProduct) => (p.familyLabel ? `${p.familyLabel}${p.condition ? ` · ${p.condition}` : ""}` : p.name);
 
 export default function DealChecker({ products, rate, defaultCurrency = "USD" }: { products: DealProduct[]; rate: number; defaultCurrency?: "USD" | "JPY" }) {
   const { single } = useCurrencyPrefs();
@@ -234,7 +234,7 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
             </div>
 
             {familyRefs.length > 0 && (
-              <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 text-sm">
+              <div className="rounded-lg border border-brand-100 bg-brand-50/40 p-3 text-sm">
                 <p className="mb-2 text-slate-700">
                   You haven&apos;t sold this version yet. Other versions in its family
                   {selected.familyName && <> <b>{selected.familyName}</b></>} have:
@@ -252,7 +252,7 @@ export default function DealChecker({ products, rate, defaultCurrency = "USD" }:
                       <button
                         type="button"
                         onClick={() => setRefKey((k) => (k === p.key ? null : p.key))}
-                        className={`rounded-lg px-2 py-1 text-xs font-medium ${refKey === p.key ? "bg-indigo-600 text-white" : "bg-white text-indigo-700 hover:bg-indigo-100"}`}
+                        className={`rounded-lg px-2 py-1 text-xs font-medium ${refKey === p.key ? "bg-brand-600 text-white" : "bg-white text-brand-700 hover:bg-brand-100"}`}
                       >
                         {refKey === p.key ? "✓ Benchmark" : "Use as benchmark"}
                       </button>
